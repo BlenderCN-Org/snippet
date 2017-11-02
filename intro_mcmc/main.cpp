@@ -236,6 +236,8 @@ int32_t main()
 #endif
 
     // MCMCを使って数え上げ
+    // TODO: 硬化の表裏の話は全く考慮していないがなぜか一致するいいのか？
+    // TODO: 初期状態が常に全てクリアしたところからスタートしているがいいのか？
     {
         grid.clear();
         std::mt19937 rng(std::random_device{}());
