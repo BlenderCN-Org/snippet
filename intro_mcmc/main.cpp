@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cassert>
 #include <random>
 #include <array>
 
@@ -49,11 +50,6 @@ public:
     {
         std::fill(bits.begin(), bits.end(), false);
     }
-    //// 特定の位置を反転する
-    //void not(int32_t idx)
-    //{
-    //    bits[idx] = !bits[idx];
-    //}
     // 指定した場所の隣接に粒子が存在するか
     bool isExistAdjacent(Index index) const
     {
@@ -103,7 +99,7 @@ public:
         {
             for (int32_t x = 0; x < SIZE; ++x)
             {
-                printf("%s", get(x, y) ? "●" :  "○");
+                printf("%s", get({ x, y }) ? "●" : "○");
             }
             printf("\n");
         }
@@ -140,22 +136,89 @@ uint32_t rng2size(std::mt19937& rng, int32_t size)
 }
 
 //
+template<int32_t SIZE>
+class BitArray
+{
+public:
+    //
+    BitArray()
+    {
+        clear();
+    }
+    //
+    void clear()
+    {
+        std::fill(bits.begin(), bits.end(), 0);
+    }
+    //
+    void next()
+    {
+        for (auto& bit : bits)
+        {
+            if (bit == false)
+            {
+                bit = true;
+                return;
+            }
+            else
+            {
+                bit = false;
+            }
+        }
+    }
+    //
+    bool get(int32_t idx) const
+    {
+        return bits[idx];
+    }
+    //
+    int32_t totalPattern() const
+    {
+        return (1 << SIZE);
+    }
+    //
+    void print() const
+    {
+        for (auto& bit : bits)
+        {
+            printf("%s", bit ? "●" : "○");
+        }
+        printf("\n");
+    }
+private:
+    std::array<bool, SIZE> bits;
+};
+
+//
 int32_t main()
 {
+    /*
+    真値
+    グリッド 1x1: E = 0.500000(2/2)
+    グリッド 2x2: E = 1.142857(7/16)
+    グリッド 3x3: E = 2.412699(63/512)
+    グリッド 4x4: E = 4.064830(1234/65536)
+    グリッド 5x5: E = 6.208433(55447/33554432)
+    */
     //
-    Grid<4> grid;
-
+    const int32_t GRID_SIZE = 4;
+    const int32_t GRID_SIZE2 = GRID_SIZE * GRID_SIZE;
+    Grid<GRID_SIZE> grid;
+    BitArray<GRID_SIZE2> bitarray;
+#if 1 // NOTE: グリッドサイズが増えてくると計算時間が劇的に増加するので5以上はコメントアウトした方が良い
     // 愚直に全てのパターンを数え上げ
     {
         float total = 0.0f;
         int32_t numCount = 0;
-        for (uint16_t pattern = 0; pattern < std::numeric_limits<uint16_t>::max(); ++pattern)
+        const int32_t tp = bitarray.totalPattern();
+        for (int32_t pattern = 0; pattern < tp; ++pattern)
         {
             grid.clear();
-            for (int32_t i = 0; i < 16; ++i)
+            for(int32_t i=0;i<GRID_SIZE2;++i)
             {
-                grid.set(i, ((pattern >> i) & 0x01));
+                grid.set(i, bitarray.get(i));
             }
+            bitarray.next();
             // 
             if (!grid.valid())
             {
@@ -167,41 +230,38 @@ int32_t main()
             //
             //grid.print();
         }
-        printf("ValidPattern: %d/%d\n", numCount, std::numeric_limits<uint16_t>::max());
+        printf("ValidPattern: %d/%d\n", numCount, tp);
         printf("E = %f\n", float(total) / float(numCount));
     }
+#endif
 
     // MCMCを使って数え上げ
     {
         grid.clear();
         std::mt19937 rng(std::random_device{}());
         float total = 0.0f;
-        int32_t numCount = 0;
-        const int32_t totalIte = 1000;
+        const int32_t totalIte = 10000;
         for (int32_t i = 0; i < totalIte; ++i)
         {
             // 特定のビット位置を書き換え
-            const int32_t idx = rng2size(rng, 16);
+            const int32_t idx = rng2size(rng, GRID_SIZE2);
             const bool isExistAdjacent = grid.isExistAdjacent(idx);
+            const bool isExist = grid.get(idx);
             // NGでなければ書き込む
-            if (isExistAdjacent)
-            {
-                grid.set(idx, true);
-            }
-            else
+            if (isExistAdjacent || isExist)
             {
                 grid.set(idx, false);
             }
-            
-            total += grid.numParticle();
-            ++numCount;
-
-            /*if ((i + 1) % 100 == 0)
+            else
             {
-                printf("E = %f (Hit:%d/%d)\n", float(total) / float(numCount), numCount, i);
-            }*/
+                grid.set(idx, true);
+            }
+            //grid.print();
+            //
+            total += grid.numParticle();
         }
-        printf("E = %f (Hit:%d/%d)\n", float(total) / float(numCount), numCount, totalIte);
+        printf("E = %f\n", float(total) / float(totalIte));
     }
+
     return 0;
 }
