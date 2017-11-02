@@ -1,0 +1,11 @@
+﻿/x64/*
+/ipch/*
+/generated/*
+/bin/*
+
+*.opendb
+*.db
+*.sdf
+*.suo
+*.user
+
