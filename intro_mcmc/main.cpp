@@ -1,5 +1,5 @@
 ﻿/*
-やさしいMCMC入門 例 7.2 p62
+やさしいMCMC入門
 */
 
 #include <cstdint>
@@ -189,8 +189,8 @@ private:
     std::array<bool, SIZE> bits;
 };
 
-//
-int32_t main()
+// 例 7.2 p62
+void lesson7_2_HardcoreModel_GibbsSampling()
 {
     /*
     真値
@@ -264,6 +264,10 @@ int32_t main()
         }
         printf("E = %f\n", float(total) / float(totalIte));
     }
+}
 
-    return 0;
+//
+int32_t main()
+{
+    lesson7_2_HardcoreModel_GibbsSampling();
 }
