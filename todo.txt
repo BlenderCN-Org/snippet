@@ -1,2 +1,7 @@
+- モーメント母関数について知る
+  出来たらFL4.pdfのChernoff boundをやってみる
 - Chernoff bound
+  https://www.probabilitycourse.com/chapter6/6_2_3_chernoff_bounds.php
+  な感じで複数比べられるとよい。ベルヌーイ試行ばかりなので他のモーメント母関数についてできるとよい
 - Chebyshev's inequality Sharpened bounds
+- merge sort for multi-thread
