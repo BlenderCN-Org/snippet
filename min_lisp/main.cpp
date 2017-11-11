@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <cstdint>
 #include <array>
+#include <vector>
+#include <iostream>
+#include <string>
 
 enum class CellTag
 {
@@ -104,19 +107,91 @@ struct Token
     // トークンの種類
     TokenType tokenType;
     // トークンの文字列
-    char buf[0xff];
+    std::string buffer;
 };
 
 //
-void getToken()
+static std::vector<Token> getToken()
 {
+    std::string buffer;
+    std::getline(std::cin, buffer);
 
+    printf("[%s]\n", buffer.c_str());
+
+    std::vector<Token> tokens;
+    for(int32_t idx=0;idx<buffer.size();++idx)
+    {
+        char ch = buffer[idx];
+        if (ch == '(')
+        {
+            Token token;
+            token.tokenType = TokenType::Lparen;
+            token.buffer = "(";
+            tokens.push_back(token);
+        }
+        else if (ch == ')')
+        {
+            Token token;
+            token.tokenType = TokenType::Rparen;
+            token.buffer = ")";
+            tokens.push_back(token);
+        }
+        else if (ch == ',')
+        {
+            Token token;
+            token.tokenType = TokenType::Dot;
+            token.buffer = ",";
+            tokens.push_back(token);
+        }
+        // 数値
+        else if (isdigit(ch))
+        {
+            std::string num;
+            num += ch;
+            while (true)
+            {
+                ++idx;
+                if (buffer.size() <= idx)
+                {
+                    break;
+                }
+                ch = buffer[idx];
+                if (!isdigit(ch))
+                {
+                    --idx;
+                    break;
+                }
+                num += ch;
+            }
+            //
+            Token token;
+            token.tokenType = TokenType::Number;
+            token.buffer = num;
+            tokens.push_back(token);
+        }
+        +とかはどうするのか。
+        else
+        {
+        }
+    }
+
+#if 0
+    // 確認出力
+    for (const auto& token : tokens)
+    {
+        printf("TokenType:%d Buffer:%s\n", token.tokenType, token.buffer.c_str() );
+    }
+#endif
+
+    return tokens;
 }
 
 //
 int32_t main()
 {
     initcell();
+
+    getToken();
 
 
     return 0;
