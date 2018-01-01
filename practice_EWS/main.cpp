@@ -1,6 +1,12 @@
 /*
- - 元のクラスのデータを渡す方法を知る
+ # TODOs
+ - 自動でレスポンスを受けるようにする
+ - 渡ってくるイメージをファイルに落としていくようにする
+ - 自動的にテーブルを更新するようにする
+ 
+ # あとで
  - タイルのイメージをファイルに落とさずに動的に更新する方法を知る
+  -> JSで動的に勝手にイメージを更新するようなものに改修する
  */
 
 //
@@ -8,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-#if 1
+#if 0
 struct Response* createResponseForRequest(const struct Request* request,
                                           struct Connection* connection)
 {
@@ -285,6 +291,7 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
     }
     
     if (request->path == strstr(request->path, "/form_get_demo")) {
+        printf("YYYYYYYYYYYYYESY\n");
         struct Response* response = responseAllocHTML("<html><head><title>GET Demo | Embedded C Web Server</title></head>\n");
         heapStringAppendString(&response->body, "<body><a href=\"/\">Home</a><br><form action=\"form_get_demo\" method=\"GET\">\n"
                                "How long should this page delay before returning to you? <input type=\"text\" name=\"delay_in_milliseconds\" value=\"1000\"> milliseconds<br>\n"
