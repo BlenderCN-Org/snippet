@@ -4,3 +4,6 @@
 [submodule "thirdparty/libevent"]
 	path = thirdparty/libevent
 	url = https://github.com/libevent/libevent
+[submodule "thirdparty/stb"]
+	path = thirdparty/stb
+	url = https://github.com/nothings/stb.git
