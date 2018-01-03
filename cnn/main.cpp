@@ -11,6 +11,49 @@
 #include <vector>
 #include <string>
 #include <utility>
+#include <dirent.h>
+//
+#define STB_IMAGE_IMPLEMENTATION
+#include "../thirdparty/stb/stb_image.h"
+
+static std::vector<std::string> getFileList(const std::string& folderPath)
+{
+    //
+    std::vector<std::string> fileList;
+    DIR* dir = nullptr;
+    struct dirent* ent = nullptr;
+    if ((dir = opendir (folderPath.c_str())) != nullptr)
+    {
+        while ((ent = readdir (dir)) != nullptr)
+        {
+            const bool isFolder = (ent->d_type == DT_DIR);
+            if(isFolder)
+            {
+                const bool invalidPath =
+                (strcmp(ent->d_name, ".") == 0) ||
+                (strcmp(ent->d_name, "..") == 0);
+                if (!invalidPath)
+                {
+                    const std::string subFolderPath = folderPath + std::string(ent->d_name) + "/";
+                    auto subFolderList = getFileList(subFolderPath);
+                    fileList.insert(fileList.end(), subFolderList.begin(), subFolderList.end());
+                }
+            }
+            // ファイルの場合のみ見る
+            else if(ent->d_type == DT_REG)
+            {
+                const bool invalidFile =
+                (strcmp(ent->d_name, ".DS_Store") == 0);
+                if(!invalidFile)
+                {
+                    fileList.push_back(folderPath + std::string(ent->d_name));
+                }
+            }
+        }
+        closedir (dir);
+    }
+    return fileList;
+}
 
 //
 template<int32_t width_, int32_t height_>
@@ -19,7 +62,25 @@ class Image
 public:
     void load(const std::string& fileName)
     {
-        // TODO: ファイルを開く
+        int32_t width = 0;
+        int32_t height = 0;
+        int32_t bpp = 0;
+        unsigned char* rgb = stbi_load( fileName.c_str(), &width, &height, &bpp, 1 );
+        assert(rgb != nullptr);
+        assert(bpp == 1);
+        assert(width == width_);
+        assert(height == height_);
+        for(int32_t y=0;y<height_;++y)
+        {
+            for(int32_t x=0;x<width_;++x)
+            {
+                pixels_[y][x] = rgb[x+width_*y];
+            }
+        }
+        //
+        stbi_image_free( rgb );
+        
+        // TODO: スケールして行く
     }
     int32_t width() const
     {
@@ -37,11 +98,22 @@ public:
         return pixels_[y][x];
     }
     //
+    void print()
+    {
+        for(int32_t y=0;y<height_;++y)
+        {
+            for(int32_t x=0;x<width_;++x)
+            {
+                printf("%03d ", pixels_[y][x]);
+            }
+            puts("");
+        }
+    }
 private:
     std::array<std::array<int32_t,width_>, height_> pixels_;
 };
-const int32_t imageWidth = 9;
-const int32_t imageHeight = 9;
+const int32_t imageWidth = 28;
+const int32_t imageHeight = 28;
 const int32_t filterSize = 3;
 const int32_t numHiddenLayer = 3;
 // 画像
@@ -82,35 +154,28 @@ CNNResults cnn(const CNNImage& image, const CNNFactors& factor)
     return ret;
 }
 
-CNNImage loadImage(const std::string& fileName)
-{
-    int32_t width = 0;
-    int32_t height = 0;
-    int32_t bpp = 0;
-    unsigned char* rgb = stbi_load( fileName.c_str(), &width, &height, &bpp, 3 );
-    assert(rgb != nullptr);
-    assert(bpp == 3);
-    stbi_image_free( rgb );
-}
-
 //
 int32_t main()
 {
+    system("pwd");
+    const std::string traingImageRoot = "../../../../mnist_png/training/";
     // ○と×の画像を読み込む
     std::vector<std::pair<CNNImage,int32_t>> images;
-    for(int32_t i=0;i<10;++i)
+    for(int32_t i=1;i<=2;++i)
     {
-        CNNImage img;
-        img.load(std::string("./maru/") + std::to_string(i) + std::string(".png"));
-        images.push_back(std::make_pair<>(img,0));
-    }
-    for(int32_t i=0;i<10;++i)
-    {
-        CNNImage img;
-        img.load(std::string("./batsu/") + std::to_string(i) + std::string(".png"));
-        images.push_back(std::make_pair<>(img,1));
+        const std::string path = traingImageRoot +
+                                std::to_string(i) +
+                                std::string("/");
+        auto imagelist = getFileList(path);
+        for(int32_t imageNo=0;imageNo<10;++imageNo)
+        {
+            CNNImage img;
+            img.load(imagelist[imageNo]);
+            images.push_back(std::make_pair<>(img,i-1));
+        }
     }
     
+    ここまで完了
 #if 1 // 学習をする場合
     // 学習
     CNNFactors factors;

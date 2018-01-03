@@ -1,4 +1,6 @@
-﻿*generated
+﻿/cnn/mnist_png/*
+
+*generated
 
 *.opendb
 *.db
