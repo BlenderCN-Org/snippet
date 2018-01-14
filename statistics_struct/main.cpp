@@ -43,6 +43,7 @@ TODO: LossyCounter実装
 #include <cstdint>
 #include <string>
 #include <set>
+#include <algorithm>
 
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v)
@@ -50,6 +51,13 @@ inline void hash_combine(std::size_t& seed, const T& v)
     std::hash<T> hasher;
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
+
+//
+static uint32_t khash(size_t v)
+{
+    return ((v+1)*2654435761) % (1<<31);
+}
+
 /*
 TODO: 普通の一つのハッシュテーブルの場合に比べて二つ以上取るメリットを知る
 TODO: 限界性能はどうやって出せるのか知る -> Wikipediaに書かれているのでそれを見るようにする
@@ -130,9 +138,10 @@ size_t computeCardinality_Naive(const std::vector<size_t>& data)
 }
 
 // Linear Countingの実装
+// TODO: テーブルサイズについての適切な決め方を知る
 size_t computeCardinality_LinerCounting(const std::vector<size_t>& data)
 {
-    const int32_t tableSize = 0xFF;
+    const int32_t tableSize = 0xFFF;
     std::bitset<tableSize> bits;
     for(auto& d : data)
     {
@@ -141,29 +150,35 @@ size_t computeCardinality_LinerCounting(const std::vector<size_t>& data)
     return bits.count();
 }
 
-// TODO: LogLogの実装
-size_t computeCardinality_LogLog(const std::vector<std::string>& strs)
+// LogLogの実装
+size_t computeCardinality_LogLog(const std::vector<size_t>& data)
 {
-    
+    uint32_t maxLeadingZeros = 0;
+    for(auto& d : data)
+    {
+        const auto hashed = khash(d);
+        uint32_t leadingZero = std::__clz(hashed);
+        maxLeadingZeros = std::max(leadingZero, maxLeadingZeros);
+    }
+    return 1 << maxLeadingZeros;
 }
+
+// 改良版LogLog
+
 
 // loglogCountingのテスト
 void testLogLogCounting()
 {
     // データセットを作成する
     std::vector<size_t> data;
-#if 1
-    data.push_back(0000);
-    data.push_back(0000);
-    data.push_back(0000);
-    data.push_back(0001);
-    data.push_back(0002);
-#else
-    // TODO: 何かからデータを引っ張ってくる
-#endif
-    // ナイーブな実装をする
+    for(int32_t i=0;i<1000;++i)
+    {
+        data.push_back((i*2)%100);
+    }
+    // 各種実装のテスト
     printf("Naive:    %lu\n", computeCardinality_Naive(data));
     printf("LinCount: %lu\n", computeCardinality_LinerCounting(data));
+    printf("LogLog0:  %lu\n", computeCardinality_LogLog(data));
 }
 
 //
