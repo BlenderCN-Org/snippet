@@ -118,33 +118,52 @@ void testBloomFilter()
  cf. Using Linear Counting, LogLog, and HyperLogLog to Estimate Cardinality
      http://moderndescartes.com/essays/hyperloglog
  */
-size_t computeCardinality_Naive(const std::vector<std::string>& strs)
+// Naiveな実装。O(N)の時間とO(N)のスペースが必要
+size_t computeCardinality_Naive(const std::vector<size_t>& data)
 {
     std::set<size_t> results;
-    for(auto& str : strs)
+    for(auto& d : data)
     {
-        std::hash<std::string> hasher;
-        results.insert(hasher(str));
+        results.insert(d);
     }
     return results.size();
+}
+
+// Linear Countingの実装
+size_t computeCardinality_LinerCounting(const std::vector<size_t>& data)
+{
+    const int32_t tableSize = 0xFF;
+    std::bitset<tableSize> bits;
+    for(auto& d : data)
+    {
+        bits[std::hash<size_t>()(d) & tableSize] = true;
+    }
+    return bits.count();
+}
+
+// TODO: LogLogの実装
+size_t computeCardinality_LogLog(const std::vector<std::string>& strs)
+{
+    
 }
 
 // loglogCountingのテスト
 void testLogLogCounting()
 {
     // データセットを作成する
-    std::vector<std::string> strs;
-#if 0
-    strs.push_back("ABC");
-    strs.push_back("DEF");
-    strs.push_back("XXX");
-    strs.push_back("ABC");
-    strs.push_back("XXX2");
+    std::vector<size_t> data;
+#if 1
+    data.push_back(0000);
+    data.push_back(0000);
+    data.push_back(0000);
+    data.push_back(0001);
+    data.push_back(0002);
 #else
     // TODO: 何かからデータを引っ張ってくる
 #endif
     // ナイーブな実装をする
-    printf("Naive: %lu\n", computeCardinality_Naive(strs));
+    printf("Naive:    %lu\n", computeCardinality_Naive(data));
+    printf("LinCount: %lu\n", computeCardinality_LinerCounting(data));
 }
 
 //
