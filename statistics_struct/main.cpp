@@ -1,4 +1,4 @@
-﻿/*
+/*
 http://postd.cc/probabilistic-data-structure-showdown-cuckoo/
 TODO: HyperLogLog実装
  -> https://research.neustar.biz/2012/10/25/sketch-of-the-day-hyperloglog-cornerstone-of-a-big-data-infrastructure/
@@ -35,8 +35,14 @@ TODO: LossyCounter実装
 
 #include <cstdio>
 #include <cstdint>
+#include <vector>
 #include <array>
 #include <bitset>
+#include <functional>
+#include <unordered_map>
+#include <cstdint>
+#include <string>
+#include <set>
 
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v)
@@ -87,6 +93,7 @@ private:
     std::bitset<M> bits;
 };
 
+// BloomFilterのテスト
 void testBloomFilter()
 {
     // 
@@ -107,7 +114,42 @@ void testBloomFilter()
     printf("Miss:%d\n", missCount);
 }
 
-void main()
+/*
+ cf. Using Linear Counting, LogLog, and HyperLogLog to Estimate Cardinality
+     http://moderndescartes.com/essays/hyperloglog
+ */
+size_t computeCardinality_Naive(const std::vector<std::string>& strs)
 {
-    testBloomFilter();
+    std::set<size_t> results;
+    for(auto& str : strs)
+    {
+        std::hash<std::string> hasher;
+        results.insert(hasher(str));
+    }
+    return results.size();
+}
+
+// loglogCountingのテスト
+void testLogLogCounting()
+{
+    // データセットを作成する
+    std::vector<std::string> strs;
+#if 0
+    strs.push_back("ABC");
+    strs.push_back("DEF");
+    strs.push_back("XXX");
+    strs.push_back("ABC");
+    strs.push_back("XXX2");
+#else
+    // TODO: 何かからデータを引っ張ってくる
+#endif
+    // ナイーブな実装をする
+    printf("Naive: %lu\n", computeCardinality_Naive(strs));
+}
+
+//
+int32_t main()
+{
+    // testBloomFilter();
+    testLogLogCounting();
 }
