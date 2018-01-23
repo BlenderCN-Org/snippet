@@ -53,9 +53,27 @@ inline void hash_combine(std::size_t& seed, const T& v)
 }
 
 //
-static uint32_t khash(size_t v)
+static uint32_t hash0(size_t v)
 {
     return ((v+1)*2654435761) % (1<<31);
+}
+
+//
+static uint32_t hash1(uint32_t x)
+{
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
+}
+
+//
+uint32_t hash2(uint32_t x)
+{
+    x = ((x >> 16) ^ x) * 0x119de1f3;
+    x = ((x >> 16) ^ x) * 0x119de1f3;
+    x = (x >> 16) ^ x;
+    return x;
 }
 
 /*
@@ -150,20 +168,53 @@ size_t computeCardinality_LinerCounting(const std::vector<size_t>& data)
     return bits.count();
 }
 
-// LogLogの実装
+// LogLogCounintgの実装
 size_t computeCardinality_LogLog(const std::vector<size_t>& data)
 {
     uint32_t maxLeadingZeros = 0;
     for(auto& d : data)
     {
-        const auto hashed = khash(d);
-        uint32_t leadingZero = std::__clz(hashed);
-        maxLeadingZeros = std::max(leadingZero, maxLeadingZeros);
+        maxLeadingZeros = std::max(std::__clz(hash0(d)), maxLeadingZeros);
     }
     return 1 << maxLeadingZeros;
 }
 
-// 改良版LogLog
+// LogLogCounting
+size_t computeCardinality_LogLog_Improve(const std::vector<size_t>& data)
+{
+    uint32_t maxLeadingZeros = 0;
+    for(auto& d : data)
+    {
+        struct Hashed
+        {
+            // バケットの選択
+            uint32_t bucket : 5;
+            // 実際のハッシュ値
+            uint32_t hash : 27;
+        };
+        const uint32_t hashedRaw = hash0(d);
+        const Hashed hashed = *reinterpret_cast<Hashed*>(&hashedRaw);
+        hash_combine(
+        hashed.bucket;
+        std::__clz(hashed.hash);
+        
+        maxLeadingZeros0 = std::max(std::__clz(h0), maxLeadingZeros0);
+        maxLeadingZeros1 = std::max(std::__clz(h1), maxLeadingZeros1);
+        maxLeadingZeros2 = std::max(std::__clz(h2), maxLeadingZeros2);
+    }
+    return
+    ((1 << maxLeadingZeros0) +
+    (1 << maxLeadingZeros1) +
+    (1 << maxLeadingZeros2))/3;
+}
+
+//
+static size_t computeCardinality_HyperLogLog(const std::vector<size_t>& data)
+{
+    // TODO: 実装
+    return 0;
+}
+
 
 
 // loglogCountingのテスト
@@ -171,14 +222,15 @@ void testLogLogCounting()
 {
     // データセットを作成する
     std::vector<size_t> data;
-    for(int32_t i=0;i<1000;++i)
+    for(int32_t i=0;i<10000;++i)
     {
-        data.push_back((i*2)%100);
+        data.push_back((i%1000)*3);
     }
     // 各種実装のテスト
     printf("Naive:    %lu\n", computeCardinality_Naive(data));
     printf("LinCount: %lu\n", computeCardinality_LinerCounting(data));
     printf("LogLog0:  %lu\n", computeCardinality_LogLog(data));
+    printf("LogLog1:  %lu\n", computeCardinality_LogLog_Improve(data));
 }
 
 //
