@@ -44,6 +44,7 @@ TODO: LossyCounter実装
 #include <string>
 #include <set>
 #include <algorithm>
+#include <numeric>
 
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v)
@@ -58,6 +59,7 @@ static uint32_t hash0(size_t v)
     return ((v+1)*2654435761) % (1<<31);
 }
 
+#if 1
 //
 static uint32_t hash1(uint32_t x)
 {
@@ -75,6 +77,7 @@ uint32_t hash2(uint32_t x)
     x = (x >> 16) ^ x;
     return x;
 }
+#endif
 
 /*
 TODO: 普通の一つのハッシュテーブルの場合に比べて二つ以上取るメリットを知る
@@ -168,69 +171,129 @@ size_t computeCardinality_LinerCounting(const std::vector<size_t>& data)
     return bits.count();
 }
 
-// LogLogCounintgの実装
-size_t computeCardinality_LogLog(const std::vector<size_t>& data)
+/*
+ http://moderndescartes.com/essays/hyperloglog
+ http://algo.inria.fr/flajolet/Publications/DuFl03.pdf
+ LogLogCounting
+ */
+float computeCardinality_LogLog(const std::vector<size_t>& data)
 {
-    uint32_t maxLeadingZeros = 0;
-    for(auto& d : data)
-    {
-        maxLeadingZeros = std::max(std::__clz(hash0(d)), maxLeadingZeros);
-    }
-    return 1 << maxLeadingZeros;
-}
-
-// LogLogCounting
-size_t computeCardinality_LogLog_Improve(const std::vector<size_t>& data)
-{
-    uint32_t maxLeadingZeros = 0;
+    std::array<int32_t,32> buckets;
+    buckets.fill(0);
+    //
     for(auto& d : data)
     {
         struct Hashed
         {
             // バケットの選択
-            uint32_t bucket : 5;
+            uint32_t bucket;
             // 実際のハッシュ値
-            uint32_t hash : 27;
+            uint32_t hash;
+            Hashed(uint32_t v)
+            {
+                bucket = (v & 0x1F);
+                hash = (v>>5);
+            }
         };
-        const uint32_t hashedRaw = hash0(d);
-        const Hashed hashed = *reinterpret_cast<Hashed*>(&hashedRaw);
-        hash_combine(
-        hashed.bucket;
-        std::__clz(hashed.hash);
-        
-        maxLeadingZeros0 = std::max(std::__clz(h0), maxLeadingZeros0);
-        maxLeadingZeros1 = std::max(std::__clz(h1), maxLeadingZeros1);
-        maxLeadingZeros2 = std::max(std::__clz(h2), maxLeadingZeros2);
+        const Hashed hashed = Hashed(hash1(d));
+        int32_t& b =buckets[hashed.bucket];
+        int32_t lzb = std::__clz(hashed.hash);
+        b = std::max(b,lzb);
     }
-    return
-    ((1 << maxLeadingZeros0) +
-    (1 << maxLeadingZeros1) +
-    (1 << maxLeadingZeros2))/3;
+    const float ave = float(std::accumulate(buckets.begin(), buckets.end(), 0))/float(buckets.size());
+    const float alpha = 0.79f;
+    return std::powf(2.0f,ave) * alpha;
 }
 
-//
-static size_t computeCardinality_HyperLogLog(const std::vector<size_t>& data)
+/*
+ HyperLogLog
+ http://moderndescartes.com/essays/hyperloglog
+ https://research.neustar.biz/2012/10/25/sketch-of-the-day-hyperloglog-cornerstone-of-a-big-data-infrastructure/
+ https://research.neustar.biz/2013/04/02/sketch-of-the-day-probabilistic-counting-with-stochastic-averaging-pcsa/
+ */
+static float computeCardinality_HyperLogLog(const std::vector<size_t>& data)
 {
-    // TODO: 実装
-    return 0;
+    std::array<int32_t,32> buckets;
+    buckets.fill(0);
+    //
+    for(auto& d : data)
+    {
+        struct Hashed
+        {
+            // バケットの選択
+            uint32_t bucket;
+            // 実際のハッシュ値
+            uint32_t hash;
+            Hashed(uint32_t v)
+            {
+                bucket = (v & 0x1F);
+                hash = (v>>5);
+            }
+        };
+        const Hashed hashed = Hashed(hash1(d));
+        int32_t& b =buckets[hashed.bucket];
+        int32_t lzb = std::__clz(hashed.hash);
+        b = std::max(b,lzb);
+    }
+    // 調和平均を取るようにする
+    float hm = 0.0f;
+    int32_t zeroBucketCount = 0;
+    for(auto b: buckets)
+    {
+        if(b == 0)
+        {
+            ++zeroBucketCount;
+        }
+        else
+        {
+            hm += 1.0f/b;
+        }
+    }
+    hm = 1.0f / hm;
+    hm *= float(buckets.size());
+    const float alpha = 0.79f;
+    //
+    const float E0 = std::powf(2.0f,hm) * alpha;
+    // 異常に項目数が少ない場合
+    if((E0 < 2.5f * 32.0f) && (zeroBucketCount != 0) )
+    {
+        const float E1 = -32.0f * std::log(float(zeroBucketCount)/32.0f);
+        return E1;
+    }
+    // 異常に項目数が多い場合
+    else if( E0 > std::powf(2.0f,32.0f)/30.0f)
+    {
+        const float H = std::powf(2.0f,32.0f);
+        const float E2 = - H * std::log(1 - E0 / H);
+        return E2;
+    }
+    // 通常の項目数の場合
+    else
+    {
+        return E0;
+    }
 }
 
-
-
-// loglogCountingのテスト
+/*
+ loglog関連のアルゴリズムのテスト
+ */
 void testLogLogCounting()
 {
-    // データセットを作成する
-    std::vector<size_t> data;
-    for(int32_t i=0;i<10000;++i)
+    printf("Naive, LineCount,    LogLog,HyperLogLog\n");
+    for(int32_t dn=10;dn<100000;dn*=1.25)
     {
-        data.push_back((i%1000)*3);
+        // データセットを作成する
+        std::vector<size_t> data;
+        for(int32_t i=0;i<dn;++i)
+        {
+            data.push_back(hash0(i));
+        }
+        printf("%5lu, %9lu, %9.0f, %10.0f\n",
+               computeCardinality_Naive(data),
+               computeCardinality_LinerCounting(data),
+               computeCardinality_LogLog(data),
+               computeCardinality_HyperLogLog(data) );
     }
-    // 各種実装のテスト
-    printf("Naive:    %lu\n", computeCardinality_Naive(data));
-    printf("LinCount: %lu\n", computeCardinality_LinerCounting(data));
-    printf("LogLog0:  %lu\n", computeCardinality_LogLog(data));
-    printf("LogLog1:  %lu\n", computeCardinality_LogLog_Improve(data));
 }
 
 //
