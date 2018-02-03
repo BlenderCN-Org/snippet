@@ -7,6 +7,51 @@
 #include <cstdio>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+
+float ternary_search(const std::function<float(float)>& fun,
+                     float a, float b)
+{
+    while((b-a) > 0.001f)
+    {
+        // printf("[%f,%f]\n", a, b);
+        if(b-a < 0.001f)
+        {
+            return (a+b)*0.5f;
+        }
+        //
+        const float d = (b-a)/3.0f;
+        float x1 = a + d;
+        float x2 = b - d;
+        const float v0 = fun(x1);
+        const float v1 = fun(x2);
+        // [a,x2]の範囲
+        if(v0<v1)
+        {
+            a = a;
+            b = x2;
+        }
+        // [x1,b]の範囲
+        else
+        {
+            a = x1;
+            b = b;
+        }
+    }
+    return (a+b)*0.5f;
+}
+
+// 三分割法
+void test11()
+{
+    //
+    const auto objFun = [](float x) -> float
+    {
+        const float p = 0.3f;
+        return (x-p)*(x-p);
+    };
+    printf("%f\n", ternary_search(objFun, -1.0f, 1.0f));
+}
 
 // p59の例題4.1
 void test4_1()
@@ -40,6 +85,7 @@ void test4_1()
 //
 int32_t main()
 {
-    test4_1();
+    test11();
+    // test4_1();
     return 0;
 }
