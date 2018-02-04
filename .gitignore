@@ -7,4 +7,11 @@
 *.sdf
 *.suo
 *.user
+*.tlog
+*.ipdb
+*.exp
+*.iobj
+*.html
+*.idb
+
 
