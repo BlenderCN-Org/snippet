@@ -25,4 +25,3 @@ int32_t main()
 {
     quadProb();
 }
-
