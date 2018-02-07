@@ -18,5 +18,5 @@ project "A"
    }
 
    sysincludedirs {
-     "../thirdparty/eigen/"
+     "../thirdparty/eigen/",
    }
