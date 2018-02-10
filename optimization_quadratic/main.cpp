@@ -94,7 +94,28 @@ void test()
     cout << "quadprog, dynamic code" << endl;
     quadprog(Q,c,A,b,x);
     std::cout << x << std::endl;
+    
+    
     cout << "    error: " << (x - x_unc).norm() << endl;
+    
+    //std::cout << "Final" << std::endl;
+    //cout << (Q * -x - c).norm() << endl;
+    IterationController ite;
+    ite.init();
+    ite.setMaxIterations(128);
+    Eigen::internal::constrained_cg(Q, A, x, c, b, ite);
+    
+    cout << "    error: " << (x - x_unc).norm() << endl;
+#if 0
+    void Eigen::internal::constrained_cg    (    const TMatrix &     A,
+                                            const CMatrix &     C,
+                                            VectorX &     x,
+                                            const VectorB &     b,
+                                            const VectorF &     f,
+                                            IterationController &     iter
+                                            )
+#endif
+
 }
 
 /*
@@ -182,29 +203,46 @@ int32_t main()
         std::cout << beta << std::endl;
     }
 #endif
+
+#if 0
+    {
+        Eigen::MatrixXd A2;
+        Eigen::VectorXd b2;
+        const int32_t t = 3;
+        A2.resize(6,128);
+        b2.resize(9);
+        A2.setIdentity();
+        b2(0)  = 1/3.0f;
+        b2(1)  = 1/3.0f;
+        b2(2)  = 1/3.0f;
+        Eigen::VectorXd x;
+        x.resize(3);
+        //
+        IterationController ite;
+        ite.init();
+        ite.setMaxIterations(128);
+        Eigen::internal::constrained_cg(A, A2, x, b, b2, ite);
+    }
+#endif
     
-#if 1
+    void test2();
+    test2();
+#if 0
     {
         // https://scicomp.stackexchange.com/a/11588
         Eigen::MatrixXd Q = A.transpose() * A;
         Eigen::VectorXd c = -A.transpose() * b;
         Eigen::MatrixXd A2;
         Eigen::VectorXd b2;
-        const int32_t t = 3;
-        A2.resize(t,t);
-        b2.resize(t);
+        A2.resize(3,3);
+        b2.resize(3);
         A2.setIdentity();
-        b2(0)  = 1/3.0f;
-        b2(1)  = 1/3.0f;
-        b2(2)  = 1/3.0f;
+        b2.setOnes();
         //
         Eigen::VectorXd x;
-        x.resize(t);
+        x.resize(3);
         EigenQP::quadprog(Q, c, A2, b2, x);
         std::cout << x << std::endl;
-        //
-        std::cout << "Rest" << std::endl;
-        std::cout << A2 * x  << std::endl;
         
         //checkPosDef(Q);
 #if 0
@@ -216,4 +254,44 @@ int32_t main()
 
     }
 #endif
+}
+
+
+void test2()
+{
+    // construct basic Ax = b
+    const int32_t numSample = 128;
+    Eigen::SparseMatrix<double> A;
+    Eigen::VectorXd b;
+    A.resize(numSample,3);
+    b.resize(numSample);
+    for(int32_t sn=0;sn<numSample;++sn)
+    {
+        // something funtion
+        const float x = float(sn)/float(numSample);
+        const float y = 2.5f * x * x + 2.4f * x + 2.3f;
+        //
+        A.insert(sn,0) = x * x;
+        A.insert(sn,1) = x;
+        A.insert(sn,2) = 1.0f;
+        b(sn) = y;
+    }
+    A.makeCompressed();
+    
+    // Make constraint. All coeffs are under 1. (Ex<I)
+    // https://scicomp.stackexchange.com/a/11588
+    Eigen::MatrixXd Q = A.transpose() * A;
+    Eigen::VectorXd c = -A.transpose() * b;
+    Eigen::MatrixXd A2;
+    Eigen::VectorXd b2;
+    A2.resize(3,3);
+    b2.resize(3);
+    A2.setIdentity();
+    //b2.setOnes();
+    b2 << 10.0,10.0,10.0;
+    //
+    Eigen::VectorXd x;
+    x.resize(3);
+    EigenQP::quadprog(Q, c, A2, b2, x);
+    std::cout << x << std::endl;
 }
