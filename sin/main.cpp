@@ -5,12 +5,6 @@
 #include <chrono>
 #include <array>
 
-// 
-inline float stdsin(float x)
-{
-    return std::sinf(x);
-}
-
 // $> HornerForm[Normal[Series[Sin[x], {x, 0, 9}]]]
 inline float taylorSinOrder9(float x)
 {
@@ -170,15 +164,33 @@ private:
 
 //
 template<typename SinFun>
-float rmse(SinFun sinFun, int32_t ite = 4096 * 64)
+float RMSE(SinFun sinFun, int32_t ite = 4096 * 64)
 {
     float t = 0.0f;
     const float invIte = 1.0f / float(ite);
     for (int32_t i = 0; i < ite; ++i)
     {
         const float x = float(i) * invIte * float(M_PI);
-        const float d = std::sinf(x) - sinFun(x);
+        const float d = std::sin(x) - sinFun(x);
         t += d * d * invIte;
+    }
+    return std::sqrtf(t);
+}
+
+//
+template<typename SinFun>
+float RMSPE(SinFun sinFun, int32_t ite = 4096 * 64)
+{
+    float t = 0.0f;
+    const float invIte = 1.0f / float(ite);
+    for (int32_t i = 0; i < ite; ++i)
+    {
+        const float x = float(i) * invIte * float(M_PI);
+        if(std::sin(x) != 0.0f)
+        {
+            const float d = (std::sin(x) - sinFun(x))/std::sin(x);
+            t += d * d * invIte;
+        }
     }
     return std::sqrtf(t);
 }
@@ -190,9 +202,10 @@ float speed(SinFun sinFun)
     
     auto start = std::chrono::high_resolution_clock::now();
     const int64_t ite = 1024 * 1024 * 16;
+    const float invIte = 1.0f/float(ite);
     for (int64_t i=0;i<ite;++i)
     {
-#if 1
+#if 0
         // random access
         const int32_t numPoint = 1 << 14;
         static_assert(RAND_MAX==0x7fffffff, "");
@@ -212,31 +225,32 @@ float speed(SinFun sinFun)
 int32_t main()
 {
     /*
-                  RMSE          TIME(ms)
-     std::sin     0.0000000000  378.00
-     taylor9      0.0014511241  158.00
-     taylor11     0.0000859548  172.00
-     pade55       0.0042526941  149.00
-     pade77       0.0000020237  160.00
-     pade99       0.0000000593  176.00
-     fastersin    0.0005011921  161.00
-     chebyshev    0.0000000504  214.00
-     lookup1024   0.0000551940  158.00
-     lookup16384  0.0000008255  152.00
-     lookup262144 0.0000000474  179.00
+     METHOD       RMSE         RMSPE         TIME(ms)
+     std::sinf    0.0000000000 0.0000000000  153.00
+     taylor9      0.0014511241 1.4585660696   78.00
+     taylor11     0.0000859548 0.0937527716   78.00
+     pade55       0.0042526941 0.8840129375   57.00
+     pade77       0.0000020237 0.0023395447   86.00
+     pade99       0.0000000593 0.0000096974  109.00
+     fastersin    0.0005011921 0.0030103917   50.00
+     chebyshev    0.0000000504 0.0000000749   92.00
+     lookup1024   0.0000551940 0.6369686127   71.00
+     lookup16384  0.0000008255 0.0348871537   62.00
+     lookup262144 0.0000000474 0.0000168940   60.00
     */
-    printf("             RMSE          TIME(ms)\n");
-    printf("std::sin     %7.10f %7.2f\n", rmse(stdsin), speed(stdsin));
-    printf("taylor9      %7.10f %7.2f\n", rmse(taylorSinOrder9), speed(taylorSinOrder9));
-    printf("taylor11     %7.10f %7.2f\n", rmse(taylorSinOrder11), speed(taylorSinOrder11));
-    printf("pade55       %7.10f %7.2f\n", rmse(padesin_55), speed(padesin_55));
-    printf("pade77       %7.10f %7.2f\n", rmse(padesin_77), speed(padesin_77));
-    printf("pade99       %7.10f %7.2f\n", rmse(padesin_99), speed(padesin_99));
-    printf("fastersin    %7.10f %7.2f\n", rmse(fastersin), speed(fastersin));
-    printf("chebyshev    %7.10f %7.2f\n", rmse(sinchebyshev), speed(sinchebyshev));
-    printf("lookup1024   %7.10f %7.2f\n", rmse(LookupSin<1024>()), speed(LookupSin<1024>()));
-    printf("lookup16384  %7.10f %7.2f\n", rmse(LookupSin<16384>()), speed(LookupSin<16384>()));
-    printf("lookup262144 %7.10f %7.2f\n", rmse(LookupSin<262144>()), speed(LookupSin<262144>()));
+#define CHECK(sinFun) RMSE(sinFun), RMSPE(sinFun), speed(sinFun)
+    printf("METHOD       RMSE         RMSPE         TIME(ms)\n");
+    printf("std::sinf    %7.10f %7.10f %7.2f\n", CHECK(std::sinf));
+    printf("taylor9      %7.10f %7.10f %7.2f\n", CHECK(taylorSinOrder9));
+    printf("taylor11     %7.10f %7.10f %7.2f\n", CHECK(taylorSinOrder11));
+    printf("pade55       %7.10f %7.10f %7.2f\n", CHECK(padesin_55));
+    printf("pade77       %7.10f %7.10f %7.2f\n", CHECK(padesin_77));
+    printf("pade99       %7.10f %7.10f %7.2f\n", CHECK(padesin_99));
+    printf("fastersin    %7.10f %7.10f %7.2f\n", CHECK(fastersin));
+    printf("chebyshev    %7.10f %7.10f %7.2f\n", CHECK(sinchebyshev));
+    printf("lookup1024   %7.10f %7.10f %7.2f\n", CHECK(LookupSin<1024>()));
+    printf("lookup16384  %7.10f %7.10f %7.2f\n", CHECK(LookupSin<16384>()));
+    printf("lookup262144 %7.10f %7.10f %7.2f\n", CHECK(LookupSin<262144>()));
     //
     return 0;
 }
