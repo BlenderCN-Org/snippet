@@ -1,6 +1,8 @@
 /*
  Rabin–Karp algorithm
- 高速な文字列検索
+ 文字列検索アルゴリズム
+ 同じ長さの検索文字列が大量にある場合にその文字列の量にほぼ関係なく全文検索ができる。
+ 代わりに一つの文字列の検索の速度は他の文字列検索アルゴリズムよりも大幅に劣る。
  https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm
  */
 #include <cstdint>
@@ -8,71 +10,99 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <unordered_map>
+#include <map>
 
 // 総当たり
-int32_t matchBF(const std::string& text, const std::string& target)
+int32_t matchBF(const std::string& text, const std::vector<std::string>& targets)
 {
-    const size_t textEnd = text.size()-target.size()+1;
-    const size_t targetEnd = target.size();
-    for(size_t i=0;i<textEnd;++i)
+    for(auto& target : targets)
     {
-        if([&]()
-           {
-               for(size_t j=0;j<targetEnd;++j)
-               {
-                   if( text[i+j] != target[j])
-                   {
-                       return false;
-                   }
-               }
-               return true;
-           }())
+        const size_t textEnd = text.size()-target.size()+1;
+        const size_t targetEnd = target.size();
+        for(size_t i=0;i<textEnd;++i)
         {
-            return i;
+            if([&]()
+               {
+                   for(size_t j=0;j<targetEnd;++j)
+                   {
+                       if( text[i+j] != target[j])
+                       {
+                           return false;
+                       }
+                   }
+                   return true;
+               }())
+            {
+                return i;
+            }
         }
+        //
     }
     return -1;
 }
 
-int32_t matchSTD(const std::string& text, const std::string& target)
+int32_t matchSTD(const std::string& text, const std::vector<std::string>& targets)
 {
-    return text.find(target);
+    for(auto& target : targets)
+    {
+        auto pos = text.find(target);
+        if(pos != std::string::npos)
+        {
+            return pos;
+        }
+    }
+    return std::string::npos;
 }
 
+
+
 //
-int32_t matchRK(const std::string& text, const std::string& target)
+int32_t matchRK(const std::string& text, const std::vector<std::string>& targets)
 {
     const size_t P = 19;
+    std::unordered_map<size_t,std::string> targetHashs;
     // 検索文字列のハッシュを計算する
-    size_t PP = 1;
-    const int32_t len = int32_t(target.size());
-    size_t targetHash = 0;
-    for(int32_t i=len-1;i>=0;--i)
+    for(auto& target : targets)
     {
-        targetHash += int64_t(target[i])*PP;
+        size_t PP = 1;
+        const int32_t len = int32_t(target.size());
+        size_t targetHash = 0;
+        for(int32_t i=len-1;i>=0;--i)
+        {
+            targetHash += int64_t(target[i])*PP;
+            PP *= P;
+        }
+        targetHashs.insert({targetHash, target});
+    }
+    const int32_t targetLen = int32_t(targets[0].size());
+    size_t PP = 1;
+    for(int32_t i=0;i<targetLen;++i)
+    {
         PP *= P;
     }
     // テキストの先頭のハッシュを求める
     size_t PP2 = 1;
     size_t textHash = 0;
-    for(int32_t i=len-1;i>=0;--i)
+    for(int32_t i=targetLen-1;i>=0;--i)
     {
         textHash += size_t(text[i])*PP2;
         PP2 *= P;
     }
     //
-    const int32_t lenText = int32_t(text.size()) - int32_t(target.size()) + 1;
-    const int32_t targetSize = int32_t(target.size());
+    const int32_t lenText = int32_t(text.size()) - int32_t(targetLen) + 1;
     int32_t i = 0;
     const char* textStr = text.c_str();
     for(i=0;i<lenText;++i)
     {
         // ハッシュが一致したら検索成功
-        if(textHash == targetHash)
+        auto ite = targetHashs.find(textHash);
+        if(ite != targetHashs.end())
         {
-#if 0
+#if 1
+            auto target = ite->second;
             // NOTE: 念のため文字列を比較
-            if(text.compare(i, targetSize, target) == 0)
+            if(text.compare(i, targetLen, target) == 0)
             {
                 return i;
             }
@@ -80,7 +110,7 @@ int32_t matchRK(const std::string& text, const std::string& target)
             return i;
 #endif
         }
-        textHash = P * textHash + (textStr[i+targetSize]) - PP * (textStr[i]);
+        textHash = P * textHash + (textStr[i+targetLen]) - PP * (textStr[i]);
     }
     return -1;
 }
@@ -90,7 +120,7 @@ template<typename Fun>
 double speed(Fun fun)
 {
     const auto start = std::chrono::system_clock::now();
-    for(int32_t i=0;i<1024*64;++i)
+    for(int32_t i=0;i<128;++i)
     {
         volatile int f = fun();
     }
@@ -105,10 +135,12 @@ int32_t main()
     {
         const std::string text = "aabc_aabbcdbccefg";
         const std::string target = "cce";
-        printf("%d\n", matchBF(text, target));
-        printf("%d\n", matchRK(text, target));
+        printf("%d\n", matchBF(text, {target}));
+        printf("%d\n", matchRK(text, {target}));
     }
 #endif
+    
+#if 1
     //
     {
         //
@@ -128,26 +160,34 @@ int32_t main()
             }
             return str;
         };
-        printf("TargetLen, BF,std,RK\n");
-        for(int32_t targetLen = 4; targetLen < 256 ; targetLen *= 2)
+        printf("TargetNum, BF,std,RK\n");
+        for(int32_t targetNum = 2; targetNum < 2048; targetNum *= 2)
         {
-            auto target = genStr(targetLen);
-            auto text = genStr(1024*16) + target;
+            int32_t targetLen = 128;
+            std::vector<std::string> targets;
+            for(int32_t i=0;i<targetNum;++i)
+            {
+                auto target = genStr(targetLen);
+                targets.push_back(target);
+            }
+            // 最後の検索文字列をテキストの末尾に追加
+            auto text = genStr(1024*64) + targets[targets.size()-1];
 #if 0
             printf("%d,%d,%d\n",
-                   matchBF(text, target),
-                   matchSTD(text, target),
-                   matchRK(text, target));
+                   matchBF(text, targets),
+                   matchSTD(text, targets),
+                   matchRK(text, targets));
 #endif
 #if 1
             printf("%d, %f,%f,%f\n",
-                   targetLen,
-                   speed([&](){return matchBF(text, target);}),
-                   speed([&](){return matchSTD(text, target);}),
-                   speed([&](){return matchRK(text, target);}));
+                   targetNum,
+                   speed([&](){return matchBF(text, targets);}),
+                   speed([&](){return matchSTD(text, targets);}),
+                   speed([&](){return matchRK(text, targets);}));
 #endif
         }
     }
+#endif
     //
     return 0;
 }
