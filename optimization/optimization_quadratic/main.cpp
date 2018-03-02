@@ -1,4 +1,4 @@
-﻿/*
+/*
  - ABC
  */
 #include <cstdint>
@@ -15,10 +15,6 @@
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/IterativeSolvers>
 
-//
-//#include <octave/config.h>
-//#include <octave/oct.h>
-//#include <octave/Matrix.h>
 
 /*
  解きたい問題
@@ -31,9 +27,9 @@
 
 #include "eigen-qp.hpp"
 
- //using namespace std;
-//using namespace Eigen;
-//using namespace EigenQP;
+using namespace std;
+using namespace Eigen;
+using namespace EigenQP;
 /*
  *  min 0.5 x.Q.x + c.x
  *
@@ -86,19 +82,40 @@ void test()
     cout << "Unconstrained..." << endl;
     VectorXs x_unc = -Q.ldlt().solve(c);
     // これはほぼ０
-    // std::cout << ((Q * x_unc) - c).norm() << std::endl;
+    //cout << (Q * -x_unc - c).norm() << endl;
     
     std::cout << x_unc << std::endl;
     VectorXs x(num_vars);
     // Generate inequality constraints
     b.array() = (A*x_unc).array() - 0.15;
     cout << "constraint..." << endl;
-    //std::cout << b << std::endl;
+    std::cout << b << std::endl;
     // Inequality constrained problem
     cout << "quadprog, dynamic code" << endl;
     quadprog(Q,c,A,b,x);
     std::cout << x << std::endl;
+    
+    
     cout << "    error: " << (x - x_unc).norm() << endl;
+    
+    //std::cout << "Final" << std::endl;
+    //cout << (Q * -x - c).norm() << endl;
+    IterationController ite;
+    ite.init();
+    ite.setMaxIterations(128);
+    Eigen::internal::constrained_cg(Q, A, x, c, b, ite);
+    
+    cout << "    error: " << (x - x_unc).norm() << endl;
+#if 0
+    void Eigen::internal::constrained_cg    (    const TMatrix &     A,
+                                            const CMatrix &     C,
+                                            VectorX &     x,
+                                            const VectorB &     b,
+                                            const VectorF &     f,
+                                            IterationController &     iter
+                                            )
+#endif
+
 }
 
 /*
@@ -125,7 +142,7 @@ int32_t main()
         // 放物線に沿ったデータの作成
         const auto getSample = [](float x)
         {
-            return 0.1f * x * x + 1.2f * x + 1.3f;
+            return 1.1f * x * x + 0.2f * x + 0.3f;
             //return x * x;
             //auto R = solver.matrixR();
             //return x * x + 1.5f * x + 2.7f;
@@ -150,36 +167,82 @@ int32_t main()
     }
     A.makeCompressed();
     
+#if 0
+    {
+        // 直接正規方程式を使う
+        auto At = A.transpose();
+        auto beta = (At*A).inverse()*At*b;
+        std::cout << beta << std::endl;
+    }
+    {
+        // 特異値分解で解く
+        std::cout << A.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b) << std::endl;
+    }
+#endif
     //
-#if 1
+#if 0
     {
         Eigen::LeastSquaresConjugateGradient<Eigen::SparseMatrix<double>> solver;
+        solver.compute(A);
+        auto beta = solver.solve(b);
+        /*
+         1
+         1.5
+         2.7
+         */
+        std::cout << beta << std::endl;
+    }
+#endif
+    
+#if 0
+    {
+        Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int32_t>> solver;
+        //Eigen::HouseholderQR<Eigen::SparseMatrix<double>> hoge;
         solver.compute(A);
         auto beta = solver.solve(b);
         std::cout << beta << std::endl;
     }
 #endif
+
+#if 0
+    {
+        Eigen::MatrixXd A2;
+        Eigen::VectorXd b2;
+        const int32_t t = 3;
+        A2.resize(6,128);
+        b2.resize(9);
+        A2.setIdentity();
+        b2(0)  = 1/3.0f;
+        b2(1)  = 1/3.0f;
+        b2(2)  = 1/3.0f;
+        Eigen::VectorXd x;
+        x.resize(3);
+        //
+        IterationController ite;
+        ite.init();
+        ite.setMaxIterations(128);
+        Eigen::internal::constrained_cg(A, A2, x, b, b2, ite);
+    }
+#endif
     
-#if 1
+    void test2();
+    test2();
+#if 0
     {
         // https://scicomp.stackexchange.com/a/11588
         Eigen::MatrixXd Q = A.transpose() * A;
         Eigen::VectorXd c = -A.transpose() * b;
         Eigen::MatrixXd A2;
         Eigen::VectorXd b2;
-        const int32_t t = 3;
-        A2.resize(t,t);
-        b2.resize(t);
+        A2.resize(3,3);
+        b2.resize(3);
         A2.setIdentity();
         b2.setOnes();
         //
         Eigen::VectorXd x;
-        x.resize(t);
+        x.resize(3);
         EigenQP::quadprog(Q, c, A2, b2, x);
         std::cout << x << std::endl;
-        //
-        /*std::cout << "Rest" << std::endl;
-        std::cout << A2 * x  << std::endl;*/
         
         //checkPosDef(Q);
 #if 0
@@ -191,4 +254,44 @@ int32_t main()
 
     }
 #endif
+}
+
+
+void test2()
+{
+    // construct basic Ax = b
+    const int32_t numSample = 128;
+    Eigen::SparseMatrix<double> A;
+    Eigen::VectorXd b;
+    A.resize(numSample,3);
+    b.resize(numSample);
+    for(int32_t sn=0;sn<numSample;++sn)
+    {
+        // something funtion
+        const float x = float(sn)/float(numSample);
+        const float y = 2.5f * x * x + 2.4f * x + 2.3f;
+        //
+        A.insert(sn,0) = x * x;
+        A.insert(sn,1) = x;
+        A.insert(sn,2) = 1.0f;
+        b(sn) = y;
+    }
+    A.makeCompressed();
+    
+    // Make constraint. All coeffs are under 1. (Ex<I)
+    // https://scicomp.stackexchange.com/a/11588
+    Eigen::MatrixXd Q = A.transpose() * A;
+    Eigen::VectorXd c = -A.transpose() * b;
+    Eigen::MatrixXd A2;
+    Eigen::VectorXd b2;
+    A2.resize(3,3);
+    b2.resize(3);
+    A2.setIdentity();
+    //b2.setOnes();
+    b2 << 10.0,10.0,10.0;
+    //
+    Eigen::VectorXd x;
+    x.resize(3);
+    EigenQP::quadprog(Q, c, A2, b2, x);
+    std::cout << x << std::endl;
 }

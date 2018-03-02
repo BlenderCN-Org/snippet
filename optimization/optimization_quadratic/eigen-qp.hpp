@@ -133,8 +133,8 @@ namespace EigenQP
         
         ~QPIneqSolver() {}
         
-        void solve(Eigen::Matrix<Scalar,NVars,NVars> &Q, Eigen::Matrix<Scalar,NVars,1> &c,
-                   Eigen::Matrix<Scalar,NIneq,NVars> &A, Eigen::Matrix<Scalar,NIneq,1> &b,
+        void solve(const Eigen::Matrix<Scalar,NVars,NVars> &Q, const Eigen::Matrix<Scalar,NVars,1> &c,
+                   const Eigen::Matrix<Scalar,NIneq,NVars> &A, const Eigen::Matrix<Scalar,NIneq,1> &b,
                    Eigen::Matrix<Scalar,NVars,1> &x_out)
         {
             const Scalar eta(0.95);
@@ -278,8 +278,8 @@ namespace EigenQP
 #endif
     
     template<typename Scalar, int NVars, int NIneq>
-    void quadprog(Eigen::Matrix<Scalar,NVars,NVars> &Q, Eigen::Matrix<Scalar,NVars,1> &c,
-                  Eigen::Matrix<Scalar,NIneq,NVars> &A, Eigen::Matrix<Scalar,NIneq,1> &b,
+    void quadprog(const Eigen::Matrix<Scalar,NVars,NVars> &Q, const Eigen::Matrix<Scalar,NVars,1> &c,
+                  const Eigen::Matrix<Scalar,NIneq,NVars> &A, const Eigen::Matrix<Scalar,NIneq,1> &b,
                   Eigen::Matrix<Scalar,NVars,1> &x)
     {
         QPIneqSolver<Scalar,NVars,NIneq> qp(c.size(),b.size());
