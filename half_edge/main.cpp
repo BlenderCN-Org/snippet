@@ -5,6 +5,9 @@ cf. http://www.flipcode.com/archives/The_Half-Edge_Data_Structure.shtml
 #include <cstdint>
 #include <vector>
 #include <array>
+#include <unordered_set>
+
+#include "../../thirdparty/vdb/vdb-win/vdb.h"
 
 // 通常のメッシュ構造
 struct Mesh
@@ -20,6 +23,53 @@ public:
     typedef std::array<int32_t, 3> Face;
     std::vector<Face> faces;
     std::vector<Vertex> vertices;
+
+public:
+    //
+    std::vector<int32_t> findAdjVtx(int32_t vtxIdx) const
+    {
+        std::unordered_set<int> s;
+        for (auto& face : faces)
+        {
+            if ((face[0] == vtxIdx) ||
+                (face[1] == vtxIdx) ||
+                (face[2] == vtxIdx))
+            {
+                for (int32_t i=0;i<3;++i)
+                {
+                    if (face[i] != vtxIdx)
+                    {
+                        s.insert(face[i]);
+                    }
+                }
+            }
+        }
+        //
+        std::vector<int32_t> ret(s.begin(),s.end());
+        std::sort(ret.begin(), ret.end());
+        return ret;
+    }
+
+    //
+    void print() const
+    {
+        for (auto& face : faces)
+        {
+            const int32_t i0 = face[0];
+            const int32_t i1 = face[1];
+            const int32_t i2 = face[2];
+            const auto v0 = vertices[i0];
+            const auto v1 = vertices[i1];
+            const auto v2 = vertices[i2];
+            const auto drawline = [](const Vertex& v0, const Vertex& v1)
+            {
+                vdb_line(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
+            };
+            drawline(v0, v1);
+            drawline(v1, v2);
+            drawline(v2, v0);            
+        }
+    }
 };
 
 // ハーフエッジのメッシュ構造
@@ -54,10 +104,16 @@ public:
     //
     HalfEdgeMesh(const Mesh& mesh)
     {
-        vertices.resize(mesh.vertices.size());
-        auto& srcVtx = mesh.vertices;
+        const auto& srcVtx = mesh.vertices;
         vertices.reserve(srcVtx.size());
-        std::copy(srcVtx.begin(), srcVtx.end(), std::back_inserter(vertices));
+        for (int32_t vi=0;vi<srcVtx.size();++vi)
+        {
+            auto& dst = vertices[vi];
+            auto& src = srcVtx[vi];
+            dst.x = dst.x;
+            dst.y = dst.y;
+            dst.z = dst.z;
+        }
 
         // TODO: 
         for (int32_t fn = 0; fn<mesh.faces.size(); ++fn)
@@ -78,6 +134,17 @@ public:
             vertices[face[0]].edge = startEdgeNo;
         }
         //
+    }
+
+    //
+    std::vector<int32_t> findAdjVtx(int32_t vtxIdx) const
+    {
+        const int32_t startEdge = vertices[vtxIdx].edge;
+        TODO: 実装
+        //
+        std::vector<int32_t> ret(s.begin(), s.end());
+        std::sort(ret.begin(), ret.end());
+        return ret;
     }
 };
 
@@ -119,7 +186,15 @@ Mesh constructMesh()
 //
 void queryTest(const Mesh& mesh, const HalfEdgeMesh& heMesh)
 {
-
+    // 指定した頂点の周りにある頂点を取ってくる
+    for (auto& i : mesh.findAdjVtx(12))
+    {
+        printf("%d\n",i);
+    }
+    for (auto& i : heMesh.findAdjVtx(12))
+    {
+        printf("%d\n", i);
+    }
 }
 
 //
@@ -127,6 +202,7 @@ int32_t main()
 {
     //
     const Mesh mesh = constructMesh();
+    //mesh.print();
     const HalfEdgeMesh heMesh(mesh);
     // TODO: 何かhalfedgeを利用したクエリーを多数行う
     queryTest(mesh, heMesh);
