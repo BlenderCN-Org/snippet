@@ -6,7 +6,7 @@ cf. http://www.flipcode.com/archives/The_Half-Edge_Data_Structure.shtml
 #include <vector>
 #include <array>
 
-//
+// 通常のメッシュ構造
 struct Mesh
 {
 public:
@@ -22,6 +22,7 @@ public:
     std::vector<Vertex> vertices;
 };
 
+// ハーフエッジのメッシュ構造
 struct HalfEdgeMesh
 {
     //
