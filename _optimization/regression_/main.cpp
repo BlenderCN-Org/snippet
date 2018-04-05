@@ -163,7 +163,7 @@ static RegressionResult LMedS(const std::vector<Sample>& samples, std::default_r
     float bestMidError = 100000000.0f;
     std::vector<float> errors(samples.size());
     //
-    for (int32_t testNo = 0; testNo<512; ++testNo)
+    for (int32_t testNo = 0; testNo<16; ++testNo)
     {
         // 二点を選択する
         const int32_t i0 = rng() % samples.size();
@@ -268,10 +268,10 @@ void test1()
             samples.push_back({x,y});
         }
         //
-        //auto ret = LMSNaive(samples);
+        auto ret = LMSNaive(samples);
         //auto ret = LMSNaiveDual(samples);
         //auto ret = RANSAC(samples, engine);
-        auto ret = LMedS(samples, engine);
+        //auto ret = LMedS(samples, engine);
         // 定数項
         fs0.add(ret.bias);
         fs1.add(ret.slope);
