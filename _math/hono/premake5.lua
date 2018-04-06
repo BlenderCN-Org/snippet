@@ -1,5 +1,7 @@
 require("premake", ">=5.0.0-alpha11")
 
+includedirs { "../thirdparty/eigen" }
+
 solution "A"
    location "generated"
    configurations { "Debug", "Release" }
@@ -13,4 +15,6 @@ project "A"
      "**.hpp",
      "**.cpp",
    }
-   flags {"C++11"}
+   
+   filter "configurations:Release"
+     optimize "Speed"
