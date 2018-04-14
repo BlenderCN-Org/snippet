@@ -15,6 +15,9 @@ project "A"
      "**.hpp",
      "**.cpp",
    }
+   flags {
+     "C++14"
+   }
    
    filter "configurations:Release"
      optimize "Speed"
