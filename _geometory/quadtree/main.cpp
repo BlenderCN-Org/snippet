@@ -192,15 +192,85 @@ public:
         nodes_.resize(1);
         nodes_[0].code_ = MortonCode2D(0);
     }
+    // 指定したUVにあるNodeを得る
+    Node& queryNode(float x, float y)
+    {
+        return nodes_[queryNodeIndex(x,y)];
+    }
+    // 指定したUVにあるNodeのIndexを得る
+    size_t queryNodeIndex(float x, float y) const
+    {
+        //
+        class Local
+        {
+        public:
+            static size_t queryNodeIndexSub(float x, float y, size_t nodeIdx, const std::vector<Node>& nodes)
+            {
+                auto& node = nodes[nodeIdx];
+                if( node.isLeaf() )
+                {
+                    return nodeIdx;
+                }
+                else
+                {
+                    const bool L = (x <= 0.5f);
+                    const bool U = (y <= 0.5f);
+                    if(L)
+                    {
+                        x *= 2.0f;
+                    }
+                    else
+                    {
+                        x -= 0.5f;
+                        x *= 2.0f;
+                    }
+                    if(U)
+                    {
+                        y *= 2.0f;
+                    }
+                    else
+                    {
+                        y -= 0.5f;
+                        y *= 2.0f;
+                    }
+                    //
+                    if(L)
+                    {
+                        if(U)
+                        {
+                            return queryNodeIndexSub(x, y, node.child[0], nodes );
+                        }
+                        else
+                        {
+                            return queryNodeIndexSub(x, y, node.child[2], nodes );
+                        }
+                    }
+                    else
+                    {
+                        if(U)
+                        {
+                            return queryNodeIndexSub(x, y, node.child[1], nodes );
+                        }
+                        else
+                        {
+                            return queryNodeIndexSub(x, y, node.child[3], nodes );
+                        }
+                    }
+                }
+            }
+        };
+        return Local::queryNodeIndexSub(x, y, 0, nodes_);
+    }
     // 指定した深さの指定したモートン番号のノードを分割する
     void subdiv(uint32_t x, uint32_t y, uint32_t depth)
     {
         MortonCode2D baseCode(x,y);
         //printf("%d\n", baseCode.code());
-        auto& node = nodes_[0];
+        int32_t targetNodeIndex = 0;
         //node
         for(int32_t di=0;di<depth;++di)
         {
+            auto& node = nodes_[targetNodeIndex];
             MortonCode2D mc = baseCode.makeParent(depth-di - 1);
             const uint32_t ch = mc.chNoParent();
             const uint32_t nextNodeIdx = node.child[ch];
@@ -209,8 +279,9 @@ public:
                 printf("Wrrong\n");
                 return;
             }
-            node = nodes_[nextNodeIdx];
+            targetNodeIndex = nextNodeIdx;
         }
+        auto& node = nodes_[targetNodeIndex];
         // 葉でなければ失敗
         if( !node.isLeaf())
         {
@@ -233,6 +304,8 @@ public:
     //
     void print()
     {
+        //
+        printf("%ld nodes\n", nodes_.size());
         //
         class Local
         {
@@ -273,9 +346,21 @@ int main()
 {
     QuadTree qt;
     qt.subdiv(0, 0, 0);
-    qt.subdiv(1, 1, 1); // TODO: ここでなんかおかしい
+    qt.subdiv(0, 0, 1);
+    //qt.subdiv(1, 0, 1);
     //qt.subdiv(2, 1, 2);
-    qt.print();
+    for(int32_t yi=0;yi<=10;++yi)
+    {
+        for(int32_t xi=0;xi<10;++xi)
+        {
+            const float x = float(xi)/10.0f;
+            const float y = float(yi)/10.0f;
+            printf("%02ld ", qt.queryNodeIndex(x, y));
+        }
+        printf("\n");
+    }
+    //
+    //qt.print();
     return 0;
     //
     const auto checkBackOriginal = [](uint32_t x, uint32_t y)
