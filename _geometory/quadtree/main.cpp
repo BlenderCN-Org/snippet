@@ -9,6 +9,7 @@
 #include <array>
 #include <vector>
 #include <cstdlib>
+#include "../../thirdparty/vdb/vdb-win/vdb.h"
 
 namespace Morton
 {
@@ -100,13 +101,13 @@ public:
     // (X,Y)の指定
     MortonCode2D(uint32_t x, uint32_t y)
     {
-        code_ = encodeXY(x,y);
+        code_ = Morton::encodeXY(x,y);
     }
     // 座標と深さを指定
     MortonCode2D(float x, float y, int32_t depth)
     {
         const float size = float(1 << depth);
-        code_ = encodeXY(uint32_t(size*x), uint32_t(size*x));
+        code_ = Morton::encodeXY(uint32_t(size*x), uint32_t(size*x));
     }
     // モートンコードそのものを返す
     uint32_t code() const
@@ -131,40 +132,10 @@ public:
     // (X,Y)を得る
     std::pair<uint32_t, uint32_t> getXY() const
     {
-        return decodeXY(code_);
+        return Morton::decodeXY(code_);
     }
     //
 private:
-    // 入力は16bitまで
-    uint32_t encodeXY(uint32_t x, uint32_t y) const
-    {
-        // 16bit -> 32bit
-        const auto part1By1 = [](uint32_t x) -> uint32_t
-        {
-            x &=                 0b00000000000000001111111111111111;
-            x = (x ^ (x << 8)) & 0b00000000111111110000000011111111;
-            x = (x ^ (x << 4)) & 0b00001111000011110000111100001111;
-            x = (x ^ (x << 2)) & 0b00110011001100110011001100110011;
-            x = (x ^ (x << 1)) & 0b01010101010101010101010101010101;
-            return x;
-        };
-        return (part1By1(y) << 1) + part1By1(x);
-    }
-    // morton codeからXYを算出する
-    std::pair<uint32_t, uint32_t> decodeXY(uint32_t code) const
-    {
-        // 32bit -> 16bit
-        const auto compact1by1 = [](uint32_t n) -> uint32_t
-        {
-            n = (n & 0b01010101010101010101010101010101);
-            n = (((n >> 1) | n) & 0b00110011001100110011001100110011);
-            n = (((n >> 2) | n) & 0b00001111000011110000111100001111);
-            n = (((n >> 4) | n) & 0b00000000111111110000000011111111);
-            n = (((n >> 8) | n) & 0b00000000000000001111111111111111);
-            return n;
-        };
-        return { compact1by1(code), compact1by1(code>>1) };
-    }
 private:
     uint32_t code_ = 0;
 };
@@ -301,7 +272,7 @@ public:
         nodes_[nn + 2].code_ = pcode.makeChild(2);
         nodes_[nn + 3].code_ = pcode.makeChild(3);
     }
-    //
+    // 内容を出力する
     void print()
     {
         //
@@ -312,19 +283,32 @@ public:
         public:
             static void printSub(int32_t nodeIdx, int32_t depth, const std::vector<Node>& nodes)
             {
+                const auto drawQuad = [](float x, float y, float s, int32_t depth)
+                {
+                    // 枠をつける
+                    const float lz = 0.01f;
+                    vdb_color(1.0f, 1.0f, 1.0f);
+                    vdb_line(x, y, lz, x+s, y, lz);
+                    vdb_line(x, y, lz, x, y+s, lz);
+                    vdb_line(x+s, y, lz, x+s, y+s, lz);
+                    vdb_line(x, y+s, lz, x+s, y+s, lz);
+                    // 矩形の描画。適当に深さで色付け
+                    vdb_color(1.0f, depth*0.2f, 0.0f);
+                    vdb_triangle(x, y, 0.0f, x+s, y+0, 0.0f, x+0.0f, y+s, 0.0f);
+                    vdb_triangle(x+s, y, 0.0f, x, y+s, 0.0f, x+s, y+s, 0.0f);
+                };
+                //
                 auto& node = nodes[nodeIdx];
                 if( node.isLeaf() )
                 {
-                    char buffer[0xff];
-                    sprintf(buffer,"%d",node.code_.code());
-                    printf("%*sL(%s)\n", depth, "", buffer);
+                    auto XY = Morton::decodeXY(node.code_.code());
+                    const float s = 1.0f/float(1 << depth);
+                    const float x = std::get<0>(XY) * s;
+                    const float y = std::get<1>(XY) * s;
+                    drawQuad(x,y,s, depth);
                 }
                 else
                 {
-                    char buffer[0xff];
-                    sprintf(buffer,"%d",node.code_.code());
-                    printf("%*sN(%s)\n", depth, "", buffer);
-                    //
                     for(int32_t ch : node.child)
                     {
                         printSub(ch, depth + 1, nodes);
@@ -344,9 +328,13 @@ public:
 //
 int main()
 {
+    vdb_frame();
     QuadTree qt;
     qt.subdiv(0, 0, 0);
     qt.subdiv(0, 0, 1);
+    qt.subdiv(0, 0, 2);
+    qt.subdiv(0, 0, 3);
+    qt.subdiv(0, 0, 4);
     //qt.subdiv(1, 0, 1);
     //qt.subdiv(2, 1, 2);
     for(int32_t yi=0;yi<=10;++yi)
@@ -360,7 +348,7 @@ int main()
         printf("\n");
     }
     //
-    //qt.print();
+    qt.print();
     return 0;
     //
     const auto checkBackOriginal = [](uint32_t x, uint32_t y)
