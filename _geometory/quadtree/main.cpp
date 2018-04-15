@@ -9,7 +9,17 @@
 #include <array>
 #include <vector>
 #include <cstdlib>
+#include <algorithm>
+#include <random>
 #include "../../thirdparty/vdb/vdb-win/vdb.h"
+
+struct Vec3
+{
+public:
+    float x;
+    float y;
+    float z;
+};
 
 namespace Morton
 {
@@ -140,10 +150,11 @@ private:
     uint32_t code_ = 0;
 };
 
+template<typename NodeData>
 class QuadTree
 {
 public:
-    struct Node
+    struct Node :public NodeData
     {
     public:
         //
@@ -162,6 +173,10 @@ public:
         // ルートだけ作成する
         nodes_.resize(1);
         nodes_[0].code_ = MortonCode2D(0);
+    }
+    std::vector<Node>& nodes()
+    {
+        return nodes_;
     }
     // 指定したUVにあるNodeを得る
     Node& queryNode(float x, float y)
@@ -253,6 +268,11 @@ public:
             targetNodeIndex = nextNodeIdx;
         }
         auto& node = nodes_[targetNodeIndex];
+        subdiv(node);
+    }
+    // 指定したノードを再分割する
+    void subdiv(Node& node)
+    {
         // 葉でなければ失敗
         if( !node.isLeaf())
         {
@@ -272,119 +292,154 @@ public:
         nodes_[nn + 2].code_ = pcode.makeChild(2);
         nodes_[nn + 3].code_ = pcode.makeChild(3);
     }
-    // 内容を出力する
-    void print()
-    {
-        //
-        printf("%ld nodes\n", nodes_.size());
-        //
-        class Local
-        {
-        public:
-            static void printSub(int32_t nodeIdx, int32_t depth, const std::vector<Node>& nodes)
-            {
-                const auto drawQuad = [](float x, float y, float s, int32_t depth)
-                {
-                    // 枠をつける
-                    const float lz = 0.01f;
-                    vdb_color(1.0f, 1.0f, 1.0f);
-                    vdb_line(x, y, lz, x+s, y, lz);
-                    vdb_line(x, y, lz, x, y+s, lz);
-                    vdb_line(x+s, y, lz, x+s, y+s, lz);
-                    vdb_line(x, y+s, lz, x+s, y+s, lz);
-                    // 矩形の描画。適当に深さで色付け
-                    vdb_color(1.0f, depth*0.2f, 0.0f);
-                    vdb_triangle(x, y, 0.0f, x+s, y+0, 0.0f, x+0.0f, y+s, 0.0f);
-                    vdb_triangle(x+s, y, 0.0f, x, y+s, 0.0f, x+s, y+s, 0.0f);
-                };
-                //
-                auto& node = nodes[nodeIdx];
-                if( node.isLeaf() )
-                {
-                    auto XY = Morton::decodeXY(node.code_.code());
-                    const float s = 1.0f/float(1 << depth);
-                    const float x = std::get<0>(XY) * s;
-                    const float y = std::get<1>(XY) * s;
-                    drawQuad(x,y,s, depth);
-                }
-                else
-                {
-                    for(int32_t ch : node.child)
-                    {
-                        printSub(ch, depth + 1, nodes);
-                    }
-                }
-            }
-        };
-        Local::printSub(0, 0, nodes_);
-    }
     
 public:
     std::vector<Node> nodes_;
     
 };
 
+struct NodeData
+{
+public:
+    float energy = 0.0f;
+};
+
+/*
+ - 複数回分割する必要があるときに対応する
+ - マージに対応する
+ - ノードのクリアみたいな処理はいらないの？
+ */
+
+// 内容を出力する
+void printQaudTree(const QuadTree<NodeData>& qt)
+{
+    //
+    printf("%ld nodes\n", qt.nodes_.size());
+    //
+    class Local
+    {
+    public:
+        static void printSub(int32_t nodeIdx, int32_t depth, const std::vector<QuadTree<NodeData>::Node>& nodes)
+        {
+            const auto drawQuad = [](float x, float y, float s, float energy)
+            {
+                const auto heatmap = [](float x) -> Vec3
+                {
+                    Vec3 r;
+                    r.x = x; // r
+                    r.y = 0.0f; // g
+                    r.z = 1.0f - x; // b
+                    return r;
+                };
+#if 1
+                // 枠をつける
+                const float lz = 0.01f;
+                vdb_color(1.0f, 1.0f, 1.0f);
+                vdb_line(x, y, lz, x+s, y, lz);
+                vdb_line(x, y, lz, x, y+s, lz);
+                vdb_line(x+s, y, lz, x+s, y+s, lz);
+                vdb_line(x, y+s, lz, x+s, y+s, lz);
+#endif
+                // エネルギー密度で色つけ
+                const float e = energy/(s*s);
+#if 0
+                const float strength = e/(100.0f+e);
+#else
+                const float strength = std::logf(e+1.0f) / 10.0f;
+#endif
+                const auto col = heatmap(strength);
+                vdb_color(col.x, col.y, col.z);
+                vdb_triangle(x, y, 0.0f, x+s, y+0, 0.0f, x+0.0f, y+s, 0.0f);
+                vdb_triangle(x+s, y, 0.0f, x, y+s, 0.0f, x+s, y+s, 0.0f);
+            };
+            //
+            auto& node = nodes[nodeIdx];
+            if( node.isLeaf() )
+            {
+                auto XY = Morton::decodeXY(node.code_.code());
+                const float s = 1.0f/float(1 << depth);
+                const float x = std::get<0>(XY) * s;
+                const float y = std::get<1>(XY) * s;
+                drawQuad(x,y,s, node.energy);
+            }
+            else
+            {
+                for(int32_t ch : node.child)
+                {
+                    printSub(ch, depth + 1, nodes);
+                }
+            }
+        }
+    };
+    Local::printSub(0, 0, qt.nodes_);
+}
 
 //
 int main()
 {
     vdb_frame();
-    QuadTree qt;
-    qt.subdiv(0, 0, 0);
-    qt.subdiv(0, 0, 1);
-    qt.subdiv(0, 0, 2);
-    qt.subdiv(0, 0, 3);
-    qt.subdiv(0, 0, 4);
-    //qt.subdiv(1, 0, 1);
-    //qt.subdiv(2, 1, 2);
-    for(int32_t yi=0;yi<=10;++yi)
+    QuadTree<NodeData> qt;
+    //
+    const auto trySubdiv = [&]()
     {
-        for(int32_t xi=0;xi<10;++xi)
+        // 総エネルギーを得る
+        float totalEnergy = 0.0f;
+        for(auto& n : qt.nodes())
         {
-            const float x = float(xi)/10.0f;
-            const float y = float(yi)/10.0f;
-            printf("%02ld ", qt.queryNodeIndex(x, y));
-        }
-        printf("\n");
-    }
-    //
-    qt.print();
-    return 0;
-    //
-    const auto checkBackOriginal = [](uint32_t x, uint32_t y)
-    {
-        auto ret = Morton::decodeXY(Morton::encodeXY(x, y));
-        assert(x == std::get<0>(ret));
-        assert(y == std::get<1>(ret));
-    };
-    for (int32_t x = 0; x < std::numeric_limits<uint16_t>::max(); ++x)
-    {
-        checkBackOriginal(x, 0);
-        checkBackOriginal(x, 1);
-        checkBackOriginal(x, 15);
-        checkBackOriginal(x, (1 << 15) + 125);
-    }
-    for (int32_t y = 0; y < std::numeric_limits<uint16_t>::max(); ++y)
-    {
-        checkBackOriginal(0, y);
-        checkBackOriginal(1, y);
-        checkBackOriginal(15, y);
-        checkBackOriginal((1 << 15) + 125, y);
-    }
-    //
-    for (int32_t z = 0; z < (1 << 10); z += 111)
-    {
-        for (int32_t y = 0; y < (1 << 10); ++y)
-        {
-            for (int32_t x = 0; x < (1 << 10); ++x)
+            if( n.isLeaf() )
             {
-                auto ret = Morton::decodeXYZ(Morton::encodeXYZ(x, y, z));
-                assert(x == std::get<0>(ret));
-                assert(y == std::get<1>(ret));
-                assert(z == std::get<2>(ret));
+                totalEnergy += n.energy;
             }
         }
+        // 再分割する
+        const float energyThres = totalEnergy / 100.0f;
+        for(auto& n : qt.nodes())
+        {
+            if( n.isLeaf() && n.energy > energyThres)
+            {
+                const float e = n.energy / 4.0f;
+                n.energy = 0.0f;
+                qt.subdiv(n);
+                //
+                auto& ns = qt.nodes();
+                ns[ns.size()-4].energy = e;
+                ns[ns.size()-3].energy = e;
+                ns[ns.size()-2].energy = e;
+                ns[ns.size()-1].energy = e;
+                break;
+            }
+        }
+    };
+    // ガウシアン分布
+    std::random_device rd{};
+    std::mt19937 gen{rd()};
+    std::normal_distribution<> distX0{0.6f,0.10f};
+    std::normal_distribution<> distY0{0.7f,0.05f};
+    std::normal_distribution<> distX1{0.3f,0.05f};
+    std::normal_distribution<> distY1{0.3f,0.10f};
+    for(int32_t i=0;i<1024 * 16;++i)
+    {
+        const auto push = [&](float x, float y)
+        {
+            if((x< 0.0f) || (1.0f <= x))
+            {
+                return;
+            }
+            if((y< 0.0f) || (1.0f <= y))
+            {
+                return;
+            }
+            qt.queryNode(x, y).energy += 0.2f;
+            trySubdiv();
+        };
+        push(distX0(gen), distY0(gen));
+        push(distX1(gen), distY1(gen));
     }
+    
+    //
+    //
+    printQaudTree(qt);
+    return 0;
     
     // TODO: 親から見た何番目の子かを返す
     
