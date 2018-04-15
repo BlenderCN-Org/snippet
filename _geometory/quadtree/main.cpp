@@ -301,10 +301,12 @@ public:
 struct NodeData
 {
 public:
-    float energy = 0.0f;
+    // このノード以下の全てのノードのエネルギーの合計
+    float totalEnergy = 0.0f;
 };
 
 /*
+ - walk関数を作成する
  - 複数回分割する必要があるときに対応する
  - マージに対応する
  - ノードのクリアみたいな処理はいらないの？
@@ -360,7 +362,7 @@ void printQaudTree(const QuadTree<NodeData>& qt)
                 const float s = 1.0f/float(1 << depth);
                 const float x = std::get<0>(XY) * s;
                 const float y = std::get<1>(XY) * s;
-                drawQuad(x,y,s, node.energy);
+                drawQuad(x,y,s, node.totalEnergy);
             }
             else
             {
@@ -377,35 +379,41 @@ void printQaudTree(const QuadTree<NodeData>& qt)
 //
 int main()
 {
+    return 0;
     vdb_frame();
     QuadTree<NodeData> qt;
     //
     const auto trySubdiv = [&]()
     {
         // 総エネルギーを得る
+        // TODO: 正しくノードから直接エネルギーを得るようにしたい
         float totalEnergy = 0.0f;
         for(auto& n : qt.nodes())
         {
             if( n.isLeaf() )
             {
-                totalEnergy += n.energy;
+                totalEnergy += n.totalEnergy;
             }
         }
+        /*
+         nodes()巡回中にresizeが走ってとてもよくない。
+         深さ優先探索などしてこれていないことを保証したい
+         */
         // 再分割する
         const float energyThres = totalEnergy / 100.0f;
         for(auto& n : qt.nodes())
         {
-            if( n.isLeaf() && n.energy > energyThres)
+            if( n.isLeaf() && n.totalEnergy > energyThres)
             {
-                const float e = n.energy / 4.0f;
-                n.energy = 0.0f;
+                const float e = n.totalEnergy / 4.0f;
+                //n.totalEnergy = 0.0f;
                 qt.subdiv(n);
                 //
                 auto& ns = qt.nodes();
-                ns[ns.size()-4].energy = e;
-                ns[ns.size()-3].energy = e;
-                ns[ns.size()-2].energy = e;
-                ns[ns.size()-1].energy = e;
+                ns[ns.size()-4].totalEnergy = e;
+                ns[ns.size()-3].totalEnergy = e;
+                ns[ns.size()-2].totalEnergy = e;
+                ns[ns.size()-1].totalEnergy = e;
                 break;
             }
         }
@@ -429,7 +437,7 @@ int main()
             {
                 return;
             }
-            qt.queryNode(x, y).energy += 0.2f;
+            qt.queryNode(x, y).totalEnergy += 0.2f;
             trySubdiv();
         };
         push(distX0(gen), distY0(gen));
@@ -439,13 +447,6 @@ int main()
     //
     //
     printQaudTree(qt);
-    return 0;
-    
-    // TODO: 親から見た何番目の子かを返す
-    
-    
-    // TODO: 次元と深さが指定された上でのmorton codeの実装を作成する
-    
     return 0;
 }
 
