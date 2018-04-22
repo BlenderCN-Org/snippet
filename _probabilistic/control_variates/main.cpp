@@ -23,7 +23,7 @@ private:
     float M_ = 0.0f;
 };
 
-//
+// https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online
 class FloatStreamStats2
 {
 public:
