@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <random>
 #include <iostream>
+#include <array>
 
 class Gnuplot
 {
@@ -45,20 +46,21 @@ void main()
     
     Gnuplot gp;
     //
-    std::mt19937 eng(0x123);
+    std::mt19937 eng(0x1234);
     //
     const auto fun = [&eng](float x)
     {
-        std::normal_distribution<> dist(0.0f, 0.4f);
+        std::normal_distribution<> dist(0.0f, 0.1f);
         const float x2 = x * x;
         const float x4 = x2 * x2;
-        return 0.2f*x4  + x - 1.0f + dist(eng);
+        return 0.2f*x2*x + x - 1.0f + dist(eng);
+        //return x + dist(eng);
     };
     const int32_t numSample = 16;
 
     Eigen::MatrixXf A;
     Eigen::VectorXf b;
-    A.resize(numSample,9);
+    A.resize(numSample,6);
     b.resize(numSample);
 
     float minY = std::numeric_limits<float>::infinity();
@@ -77,6 +79,11 @@ void main()
         A(sn, 2) = x2;
         A(sn, 3) = x2 * x;
         A(sn, 4) = x4;
+        A(sn, 5) = x4 * x;
+        /*A(sn, 6) = x4 * x2;
+        A(sn, 7) = x4 * x2 * x;
+        A(sn, 8) = x4 * x4;
+        A(sn, 9) = x4 * x4 * x;*/
         b(sn) = y;
 
         minY = std::min(minY, y);
@@ -88,6 +95,7 @@ void main()
     fprintf(gp, "set xrange[0:1]\n");
     fprintf(gp, "set yrange[%f:%f]\n", minY, maxY);
 
+#if 1
     // 普通に解く
     {
         Eigen::LeastSquaresConjugateGradient<Eigen::MatrixXf> solver;
@@ -95,16 +103,25 @@ void main()
         auto beta = solver.solve(b);
         std::cout << beta << std::endl;
         // プロットする
-        fprintf(gp, "plot %f + %f*x**1 + %f*x**2 + %f*x**3 + %f*x**4 + %f*x**5 title \"LeastSquare\"\n", beta(0), beta(1), beta(2), beta(3), beta(4), beta(5));
+        /*fprintf(gp, "plot %f + %f*x**1 + %f*x**2 + %f*x**3 + %f*x**4 + %f*x**5 + %f*x**6 + %f*x**7 + %f*x**8 + %f*x**9 title \"LeastSquare\"\n",
+            beta(0), beta(1), beta(2), beta(3), beta(4), beta(5), beta(6), beta(7), beta(8), beta(9) );*/
+        fprintf(gp, "plot %f + %f*x**1 + %f*x**2 + %f*x**3 + %f*x**4 + %f*x**5 title \"leastsquare\"\n", beta(0), beta(1), beta(2), beta(3), beta(4), beta(5));
+        //fprintf(gp, "plot %f + %f*x**1  title \"LeastSquare\"\n", beta(0), beta(1));
     }
+#endif
     // L2正則化
     {
-        for (float alpha = 0.2f; alpha <= 1.0f; alpha += 0.2f)
+#if 1
+        for (float alpha : std::array<float,4>{0.0001f, 0.001f, 0.1f, 0.2f})
         {
             auto beta = ridge(A, b, alpha);
             std::cout << beta << std::endl;
             // プロットする
+            /*fprintf(gp, "replot %f + %f*x**1 + %f*x**2 + %f*x**3 + %f*x**4 + %f*x**5 + %f*x**6 + %f*x**7 + %f*x**8 + %f*x**9 title \"Ridge regression(%f)\"\n",
+                beta(0), beta(1), beta(2), beta(3), beta(4), beta(5), beta(6), beta(7), beta(8), beta(9), alpha);*/
             fprintf(gp, "replot %f + %f*x**1 + %f*x**2 + %f*x**3 + %f*x**4 + %f*x**5 title \"Ridge regression(%2.1f)\"\n", beta(0), beta(1), beta(2), beta(3), beta(4), beta(5), alpha);
+            //fprintf(gp, "replot %f + %f*x**1 title \"Ridge regression(%2.1f)\"\n", beta(0), beta(1), alpha);
         }
+#endif
     }
 }
