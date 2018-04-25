@@ -1,5 +1,6 @@
 ﻿#include <cstdio>
 #include <cstdint>
+#include <random>
 //
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -12,6 +13,7 @@
 #include <Eigen/SparseCore>
 #include <Eigen/Sparse>
 
+//
 class Image
 {
 public:
@@ -32,6 +34,10 @@ public:
     {
         return &image_[(x + y*width_) * bpp_];
     }
+    float pixelF(int32_t x, int32_t y)
+    {
+        return float(*pixel(x,y))/255.0f;
+    }
     uint8_t* buffer()
     {
         return image_;
@@ -51,13 +57,37 @@ private:
     uint8_t* image_ = nullptr;
 };
 
+//
+class FloatStreamStats
+{
+public:
+    void add(float v)
+    {
+        ++n_;
+        mu_ += (v - mu_) / float(n_);
+    }
+    float mu() const
+    {
+        return mu_;
+    }
+private:
+    int32_t n_ = 0;
+    float mu_ = 0.0f;
+};
+
+//
 struct Vec2
 {
 public:
     float x;
     float y;
 };
+//
+Vec2 operator + (const Vec2& lhs, const Vec2& rhs) { return { lhs.x + rhs.x,lhs.y + rhs.y }; }
+Vec2 operator - (const Vec2& lhs, const Vec2& rhs) { return { lhs.x - rhs.x,lhs.y - rhs.y }; }
+Vec2 operator * (const Vec2& v, float s) { return { v.x * s, v.y * s }; }
 
+//
 class Mesh
 {
 public:
@@ -68,7 +98,11 @@ public:
     }
     int32_t numVtx() const
     {
-        return int32_t(vtxColors_.size());
+        return numVertex_;
+    }
+    int32_t numFace() const
+    {
+        return numVertexSqrtM1_ * numVertexSqrtM1_ * 2;
     }
     // 指定した頂点番号の頂点位置を返す
     Vec2 vpos(int32_t idx) const
@@ -78,6 +112,27 @@ public:
         const float x = float(ix) / float(numVertexSqrtM1_);
         const float y = float(iy) / float(numVertexSqrtM1_);
         return { x,y };
+    }
+    // 指定した面番号のインデックスを返す
+    std::tuple<int32_t, int32_t, int32_t> index(int32_t faceIdx)
+    {
+        const int32_t x = faceIdx % (numVertexSqrtM1_ * 2);
+        const int32_t y = faceIdx / (numVertexSqrtM1_ * 2);
+        // 左
+        if (x % 2 == 0)
+        {
+            const int32_t i0 = numVertexSqrt_ * y + x/2;
+            const int32_t i1 = i0 + 1;
+            const int32_t i2 = i0 + numVertexSqrt_;
+            return {i0, i1, i2};
+        }
+        else
+        {
+            const int32_t i0 = numVertexSqrt_ * y + x / 2 + 1;
+            const int32_t i1 = i0 + numVertexSqrtM1_;
+            const int32_t i2 = i0 + numVertexSqrt_;
+            return { i0, i1, i2 };
+        }
     }
     // 指定した頂点番号の色を返す
     float& vcol(int32_t idx)
@@ -97,7 +152,7 @@ public:
         float ffx = fx - float(left);
         float ffy = fy - float(up);
         //
-        return vtxColors_[left + up * numVertexSqrt_];
+        //return vtxColors_[left + up * numVertexSqrt_];
         // 左半分
         if (ffx + ffy < 1.0f)
         {
@@ -118,8 +173,23 @@ public:
             return  (fld - frd)*ffx + (fru - frd)*ffy + frd;
         }
     }
+    void writeToImage(Image& img)
+    {
+        // メッシュの内容を書き出し
+        for (int32_t y = 0; y<img.height(); ++y)
+        {
+            for (int32_t x = 0; x < img.width(); ++x)
+            {
+                const float fx = float(x) / float(img.width());
+                const float fy = float(y) / float(img.height());
+                uint8_t* p = img.pixel(x, y);
+                const float fc = fetchColor(fx, fy)*255.0f;
+                *p = std::min(int32_t(fc), 0xFF);
+            }
+        }
+    }
 private:
-    const int32_t numVertexSqrt_ = 128;
+    const int32_t numVertexSqrt_ = 64;
     const int32_t numVertexSqrtM1_ = numVertexSqrt_ - 1;
     const int32_t numVertex_ = numVertexSqrt_ * numVertexSqrt_;
     std::vector<float> vtxColors_;
@@ -176,7 +246,7 @@ static void test0()
 //
 void test1()
 {
-    // TODO: 三角形を定義してそれをピクセルとして書き出せるようにする
+    // ポイントサンプルで書き出し
     Mesh mesh;
     Image img;
     img.load("../test.png");
@@ -189,27 +259,85 @@ void test1()
         // ポイントサンプル
         mesh.vcol(vi) = float(*img.pixel(x, y)) / 255.0f;
     }
-    // メッシュの内容を書き出し
-    for (int32_t y = 0; y<img.height(); ++y)
+    // 書き出し
+    mesh.writeToImage(img);
+    img.save("../point.png");
+}
+
+// エリアサンプルして書き出し
+void test2()
+{
+    std::mt19937 eng(0x123);
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    const auto rng01 = [&]()
     {
-        for (int32_t x = 0; x < img.width(); ++x)
+        return dist(eng);
+    };
+    const auto triSample = [&]() -> std::pair<float,float>
+    {
+        const float x = rng01();
+        const float y = rng01();
+        if (x + y > 1.0f)
         {
-            const float fx = float(x) / float(img.width());
-            const float fy = float(y) / float(img.height());
-            uint8_t* p = img.pixel(x, y);
-            const float fc = mesh.fetchColor(fx, fy)*250.0f;
-            *p = std::min(int32_t(fc), 0xFF);
+            return { 1.0f - x,1.0f - y };
+        }
+        else
+        {
+            return { x,y };
+        }
+    };
+    // エリアサンプルで書き出し
+    Mesh mesh;
+    Image img;
+    img.load("../test.png");
+    //
+    std::vector<FloatStreamStats> fs;
+    fs.resize(mesh.numVtx());
+    for(int32_t fi=0;fi<mesh.numFace();++fi)
+    {
+        auto idx = mesh.index(fi);
+        const int32_t i0 = std::get<0>(idx);
+        const int32_t i1 = std::get<1>(idx);
+        const int32_t i2 = std::get<2>(idx);
+        const Vec2 v0 = mesh.vpos(i0);
+        const Vec2 v1 = mesh.vpos(i1);
+        const Vec2 v2 = mesh.vpos(i2);
+
+        // エリアサンプル
+        for (int32_t sn = 0; sn < 512; ++sn)
+        {
+            const auto tw = triSample();
+            const Vec2 uv = v0 + (v1 - v0) * std::get<0>(tw) + (v2 - v0) * std::get<1>(tw);
+            const int32_t x = int32_t(uv.x * img.width());
+            const int32_t y = int32_t(uv.y * img.height());
+            const float s = img.pixelF(x, y);
+            fs[i0].add(s);
+            fs[i1].add(s);
+            fs[i2].add(s);
         }
     }
+    for (int32_t vi=0;vi<mesh.numVtx();++vi)
+    {
+        mesh.vcol(vi) = fs[vi].mu();
+    }
     // 書き出し
-    img.save("../result.png");
+    mesh.writeToImage(img);
+    img.save("../area.png");
+}
+
+// 最適化して出す
+void test3()
+{
+
 }
 
 //
 int32_t main()
 {
     //test0();
-    test1();
+    //test1();
+    test2();
+    //test3();
     
     //
     return 0;
