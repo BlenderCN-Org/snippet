@@ -265,28 +265,29 @@ public:
         float ffy = fy - float(up);
         const int32_t quadFaceIdx = left + up * numQuadFaceSqrt_;
 
-        return vtxColors_[quadFaceIdx * 4];
-        ////
-        ////return vtxColors_[left + up * numVertexSqrt_];
+        //return vtxColors_[quadFaceIdx * 4];
+        //
         //// 左半分
-        //if (ffx + ffy < 1.0f)
-        //{
-        //    const float flu = vtxColors_[left + up * numVertexSqrt_];
-        //    const float fru = vtxColors_[right + up * numVertexSqrt_];
-        //    const float fld = vtxColors_[left + down * numVertexSqrt_];
-        //    return  (fru - flu)*ffx + (fld - flu)*ffy + flu;
-        //}
-        //// 右半分
-        //else
-        //{
-        //    ffx = 1.0f - ffx;
-        //    ffy = 1.0f - ffy;
-        //    //
-        //    const float fru = vtxColors_[right + up * numVertexSqrt_];
-        //    const float fld = vtxColors_[left + down * numVertexSqrt_];
-        //    const float frd = vtxColors_[right + down * numVertexSqrt_];
-        //    return  (fld - frd)*ffx + (fru - frd)*ffy + frd;
-        //}
+        if (ffx + ffy < 1.0f)
+        {
+            const int32_t baseIdx = quadFaceIdx * 4;
+            const float flu = vtxColors_[baseIdx + 0];
+            const float fru = vtxColors_[baseIdx + 1];
+            const float fld = vtxColors_[baseIdx + 2];
+            return  (fru - flu)*ffx + (fld - flu)*ffy + flu;
+        }
+        // 右半分
+        else
+        {
+            ffx = 1.0f - ffx;
+            ffy = 1.0f - ffy;
+            //
+            const int32_t baseIdx = quadFaceIdx * 4;
+            const float fru = vtxColors_[baseIdx + 1];
+            const float fld = vtxColors_[baseIdx + 2];
+            const float frd = vtxColors_[baseIdx + 3];
+            return  (fld - frd)*ffx + (fru - frd)*ffy + frd;
+        }
     }
     void writeToImage(Image& img)
     {
@@ -304,7 +305,7 @@ public:
         }
     }
 private:
-    const int32_t numQuadFaceSqrt_ = 32;
+    const int32_t numQuadFaceSqrt_ = 2;
     const int32_t numQuadFaceSqrtM1_ = numQuadFaceSqrt_ - 1;
     const int32_t numQuadFace_ = numQuadFaceSqrt_ * numQuadFaceSqrt_;
     const int32_t numVertex_ = numQuadFace_ * 4;
@@ -502,7 +503,7 @@ void test3()
         fs.resize(mesh.numVtx());
         for (int32_t fi = 0; fi < mesh.numFace(); ++fi)
         {
-            auto idx = mesh.index(fi);
+            auto idx = mesh.index(fi); つぎはここから
             const int32_t i0 = std::get<0>(idx);
             const int32_t i1 = std::get<1>(idx);
             const int32_t i2 = std::get<2>(idx);
@@ -543,7 +544,8 @@ void test3()
         }
         for (int32_t vi = 0; vi < mesh.numVtx(); ++vi)
         {
-            mesh.vcol(vi) = fs[vi].mu();
+            //mesh.vcol(vi) = fs[vi].mu();
+            mesh.vcol(vi) = float(vi)/float(mesh.numVtx());
         }
         // 書き出し
         mesh.writeToImage(img);
