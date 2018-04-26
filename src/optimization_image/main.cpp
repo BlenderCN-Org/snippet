@@ -222,12 +222,12 @@ public:
         const int32_t vtxIdxInFace = idx % 4;
         const int32_t fx = quadFaceNo % numQuadFaceSqrt_;
         const int32_t fy = quadFaceNo / numQuadFaceSqrt_;
-        const float baseX = float(fx) / float(numQuadFaceSqrtM1_);
-        const float baseY = float(fy) / float(numQuadFaceSqrtM1_);
+        const float baseX = float(fx) / float(numQuadFaceSqrt_);
+        const float baseY = float(fy) / float(numQuadFaceSqrt_);
         const std::array<float, 4> offsX = { 0.0f, 1.0f, 0.0f, 1.0f };
         const std::array<float, 4> offsY = { 0.0f, 0.0f, 1.0f, 1.0f };
-        const float x = baseX + offsX[vtxIdxInFace] / float(numQuadFaceSqrtM1_);
-        const float y = baseY + offsY[vtxIdxInFace] / float(numQuadFaceSqrtM1_);
+        const float x = baseX + offsX[vtxIdxInFace] / float(numQuadFaceSqrt_);
+        const float y = baseY + offsY[vtxIdxInFace] / float(numQuadFaceSqrt_);
         return { x,y };
     }
     // 指定した面番号のインデックスを返す
@@ -255,8 +255,8 @@ public:
     float fetchColor(float x, float y) const
     {
         //// □を判定
-        const float fx = x * float(numQuadFaceSqrtM1_);
-        const float fy = y * float(numQuadFaceSqrtM1_);
+        const float fx = x * float(numQuadFaceSqrt_);
+        const float fy = y * float(numQuadFaceSqrt_);
         const int32_t left = int32_t(fx);
         const int32_t up = int32_t(fy);
         const int32_t right = left + 1;
@@ -305,8 +305,7 @@ public:
         }
     }
 private:
-    const int32_t numQuadFaceSqrt_ = 2;
-    const int32_t numQuadFaceSqrtM1_ = numQuadFaceSqrt_ - 1;
+    const int32_t numQuadFaceSqrt_ = 64;
     const int32_t numQuadFace_ = numQuadFaceSqrt_ * numQuadFaceSqrt_;
     const int32_t numVertex_ = numQuadFace_ * 4;
     std::vector<float> vtxColors_;
@@ -494,8 +493,11 @@ void test3()
         }
     };
 
-    for (float alpha : std::array<float, 5>({ 0.0f, 0.01f, 0.1f, 0.2f, 0.5f }))
+    //for (float alpha : std::array<float, 5>({ 0.0f, 0.01f, 0.1f, 0.2f, 0.5f }))
     {
+        //
+        const float alpha = 0.0f;
+        //
         Mesh2 mesh;
         Image img;
         img.load("../src.png");
@@ -503,7 +505,7 @@ void test3()
         fs.resize(mesh.numVtx());
         for (int32_t fi = 0; fi < mesh.numFace(); ++fi)
         {
-            auto idx = mesh.index(fi); つぎはここから
+            auto idx = mesh.index(fi);
             const int32_t i0 = std::get<0>(idx);
             const int32_t i1 = std::get<1>(idx);
             const int32_t i2 = std::get<2>(idx);
@@ -512,7 +514,7 @@ void test3()
             const Vec2 v2 = mesh.vpos(i2);
 
             // 最適化
-            const int32_t numSample = 16;
+            const int32_t numSample = 128;
             Eigen::MatrixXf A;
             Eigen::VectorXf b;
             A.resize(numSample, 3);
@@ -530,6 +532,10 @@ void test3()
                 A(sn, 1) = u;
                 A(sn, 2) = v;
                 b(sn) = s;
+
+                /*fs[i0].add(s);
+                fs[i1].add(s);
+                fs[i2].add(s);*/
             }
             //
             //Eigen::VectorXf solved = A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
@@ -544,8 +550,8 @@ void test3()
         }
         for (int32_t vi = 0; vi < mesh.numVtx(); ++vi)
         {
-            //mesh.vcol(vi) = fs[vi].mu();
-            mesh.vcol(vi) = float(vi)/float(mesh.numVtx());
+            mesh.vcol(vi) = fs[vi].mu();
+            //mesh.vcol(vi) = float(vi)/float(mesh.numVtx()-1);
         }
         // 書き出し
         mesh.writeToImage(img);
