@@ -2,7 +2,9 @@
 #include <cstdint>
 #include <random>
 #include <array>
+#include <unordered_map>
 //
+#pragma warning(disable:4996)
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -187,7 +189,7 @@ public:
                 const float fy = float(y) / float(img.height());
                 uint8_t* p = img.pixel(x, y);
                 const float fc = fetchColor(fx, fy)*255.0f;
-                *p = std::min(int32_t(fc), 0xFF);
+                *p = std::max(std::min(int32_t(fc), 0xFF),0x00);
             }
         }
     }
@@ -197,120 +199,6 @@ private:
     const int32_t numVertex_ = numVertexSqrt_ * numVertexSqrt_;
     std::vector<float> vtxColors_;
 };
-
-// 
-class Mesh2
-{
-public:
-    Mesh2()
-    {
-        vtxColors_.resize(numVertex_);
-        std::fill(vtxColors_.begin(), vtxColors_.end(), 1.0f);
-    }
-    int32_t numVtx() const
-    {
-        return numVertex_;
-    }
-    int32_t numFace() const
-    {
-        return numQuadFace_ * 2;
-    }
-    // 指定した頂点番号の頂点位置を返す
-    Vec2 vpos(int32_t idx) const
-    {
-        const int32_t quadFaceNo = idx / 4;
-        const int32_t vtxIdxInFace = idx % 4;
-        const int32_t fx = quadFaceNo % numQuadFaceSqrt_;
-        const int32_t fy = quadFaceNo / numQuadFaceSqrt_;
-        const float baseX = float(fx) / float(numQuadFaceSqrt_);
-        const float baseY = float(fy) / float(numQuadFaceSqrt_);
-        const std::array<float, 4> offsX = { 0.0f, 1.0f, 0.0f, 1.0f };
-        const std::array<float, 4> offsY = { 0.0f, 0.0f, 1.0f, 1.0f };
-        const float x = baseX + offsX[vtxIdxInFace] / float(numQuadFaceSqrt_);
-        const float y = baseY + offsY[vtxIdxInFace] / float(numQuadFaceSqrt_);
-        return { x,y };
-    }
-    // 指定した面番号のインデックスを返す
-    std::tuple<int32_t, int32_t, int32_t> index(int32_t faceIdx) const
-    {
-        const int32_t quadFaceNo = (faceIdx / 2);
-        const int32_t baseIdx = quadFaceNo * 4;
-        // 左上
-        if (faceIdx % 2 == 0)
-        {
-            return { baseIdx + 0, baseIdx + 1, baseIdx + 2 };
-        }
-        // 右上
-        else
-        {
-            return { baseIdx + 1, baseIdx + 3, baseIdx + 2 };
-        }
-    }
-    // 指定した頂点番号の色を返す
-    float& vcol(int32_t idx)
-    {
-        return vtxColors_[idx];
-    }
-    // 指定した座標の色を返す
-    float fetchColor(float x, float y) const
-    {
-        //// □を判定
-        const float fx = x * float(numQuadFaceSqrt_);
-        const float fy = y * float(numQuadFaceSqrt_);
-        const int32_t left = int32_t(fx);
-        const int32_t up = int32_t(fy);
-        const int32_t right = left + 1;
-        const int32_t down = up + 1;
-        float ffx = fx - float(left);
-        float ffy = fy - float(up);
-        const int32_t quadFaceIdx = left + up * numQuadFaceSqrt_;
-
-        //return vtxColors_[quadFaceIdx * 4];
-        //
-        //// 左半分
-        if (ffx + ffy < 1.0f)
-        {
-            const int32_t baseIdx = quadFaceIdx * 4;
-            const float flu = vtxColors_[baseIdx + 0];
-            const float fru = vtxColors_[baseIdx + 1];
-            const float fld = vtxColors_[baseIdx + 2];
-            return  (fru - flu)*ffx + (fld - flu)*ffy + flu;
-        }
-        // 右半分
-        else
-        {
-            ffx = 1.0f - ffx;
-            ffy = 1.0f - ffy;
-            //
-            const int32_t baseIdx = quadFaceIdx * 4;
-            const float fru = vtxColors_[baseIdx + 1];
-            const float fld = vtxColors_[baseIdx + 2];
-            const float frd = vtxColors_[baseIdx + 3];
-            return  (fld - frd)*ffx + (fru - frd)*ffy + frd;
-        }
-    }
-    void writeToImage(Image& img)
-    {
-        // メッシュの内容を書き出し
-        for (int32_t y = 0; y<img.height(); ++y)
-        {
-            for (int32_t x = 0; x < img.width(); ++x)
-            {
-                const float fx = float(x) / float(img.width());
-                const float fy = float(y) / float(img.height());
-                uint8_t* p = img.pixel(x, y);
-                const float fc = fetchColor(fx, fy)*255.0f;
-                *p = std::min(int32_t(fc), 0xFF);
-            }
-        }
-    }
-private:
-    const int32_t numQuadFaceSqrt_ = 64;
-    const int32_t numQuadFace_ = numQuadFaceSqrt_ * numQuadFaceSqrt_;
-    const int32_t numVertex_ = numQuadFace_ * 4;
-    std::vector<float> vtxColors_;
-};
-
 
 // 低ランク近似
 static void test0()
@@ -455,7 +343,7 @@ Eigen::MatrixXf ridgeRegression(const Eigen::MatrixXf& A, const Eigen::VectorXf&
     ① そのまま $$A' \hat{x} = b'$$ の形として見なして解く
     ➁ SDVした結果のV行列の左は$$A^{T}A$$の固有値、U行列の左は$$A A^{T}$$の固有値であることを使って式変形
     */
-#if 1
+#if 0
     //
     auto I = Eigen::MatrixXf::Identity(A.cols(), A.cols());
     auto Ad = (A.transpose() * A + alpha * alpha * I);
@@ -470,7 +358,7 @@ Eigen::MatrixXf ridgeRegression(const Eigen::MatrixXf& A, const Eigen::VectorXf&
 #endif
 }
 
-// 面転移で最適化して出す
+// 面単位で最適化して出す
 void test3()
 {
     std::mt19937 eng(0x123);
@@ -498,7 +386,7 @@ void test3()
         //
         const float alpha = 0.0f;
         //
-        Mesh2 mesh;
+        Mesh mesh;
         Image img;
         img.load("../src.png");
         std::vector<FloatStreamStats> fs;
@@ -532,13 +420,8 @@ void test3()
                 A(sn, 1) = u;
                 A(sn, 2) = v;
                 b(sn) = s;
-
-                /*fs[i0].add(s);
-                fs[i1].add(s);
-                fs[i2].add(s);*/
             }
-            //
-            //Eigen::VectorXf solved = A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
+            // 通常のリッジ回帰
             Eigen::VectorXf solved = ridgeRegression(A, b, alpha);
             const float a0 = solved(0);
             const float a1 = solved(0) + solved(1);
@@ -561,13 +444,135 @@ void test3()
     }
 }
 
+// 全ての面を使って最適化
+void test4()
+{
+    std::mt19937 eng(0x123);
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    const auto rng01 = [&]()
+    {
+        return dist(eng);
+    };
+    const auto triSample = [&]() -> std::pair<float, float>
+    {
+        const float x = rng01();
+        const float y = rng01();
+        if (x + y > 1.0f)
+        {
+            return { 1.0f - x,1.0f - y };
+        }
+        else
+        {
+            return { x,y };
+        }
+    };
+
+    for (float alpha : std::array<float, 5>({ 0.0f, 0.01f, 0.1f, 0.2f, 0.5f }))
+    {
+        //
+        Mesh mesh;
+        Image img;
+        img.load("../src.png");
+        //
+        const int32_t numSamplePerTri = 128;
+        Eigen::SparseMatrix<float, Eigen::RowMajor> A(numSamplePerTri*mesh.numFace(), mesh.numVtx());
+        Eigen::VectorXf b(numSamplePerTri*mesh.numFace());
+        // 行毎に3つ要素を確保する
+        A.reserve(Eigen::VectorXi::Constant(numSamplePerTri*mesh.numFace(), 3));
+        //
+        for (int32_t fi = 0; fi < mesh.numFace(); ++fi)
+        {
+            auto idx = mesh.index(fi);
+            const int32_t i0 = std::get<0>(idx);
+            const int32_t i1 = std::get<1>(idx);
+            const int32_t i2 = std::get<2>(idx);
+            const Vec2 v0 = mesh.vpos(i0);
+            const Vec2 v1 = mesh.vpos(i1);
+            const Vec2 v2 = mesh.vpos(i2);
+            const int32_t snBase = fi * numSamplePerTri;
+            // 最適化
+            for (int32_t sn = 0; sn < numSamplePerTri; ++sn)
+            {
+                const auto uv = triSample();
+                const float u = std::get<0>(uv);
+                const float v = std::get<1>(uv);
+                const Vec2 uvIimage = v0 + (v1 - v0) * u + (v2 - v0) * v;
+                const int32_t x = int32_t(uvIimage.x * img.width());
+                const int32_t y = int32_t(uvIimage.y * img.height());
+                const float s = img.pixelF(x, y);
+                A.insert(snBase+sn, i0) = 1.0f - (u+v);
+                A.insert(snBase + sn, i1) = u;
+                A.insert(snBase + sn, i2) = v;
+                b(snBase + sn) = s;
+            }
+        }
+        // eq.9, Tikhonov
+        const float scale = 1.0f + alpha;
+        A *= scale;
+        //
+        Eigen::LeastSquaresConjugateGradient<Eigen::SparseMatrix<float>> solver;
+        solver.compute(A);
+        const Eigen::VectorXf solved = solver.solve(b);
+        //
+        for (int32_t vi = 0; vi < mesh.numVtx(); ++vi)
+        {
+            mesh.vcol(vi) = solved(vi);
+        }
+        // 書き出し
+        mesh.writeToImage(img);
+        std::stringstream ss;
+        ss << "../_opt_area" << alpha << ".png";
+        img.save(ss.str());
+    }
+}
+
+// https://github.com/nvpro-samples/optix_prime_baking/blob/master/bake_filter_least_squares.cpp
+struct SampleInfo
+{
+public:
+    //
+    float w;
+    float u;
+    float v;
+    //
+    int32_t vi0;
+    int32_t vi1;
+    int32_t vi2;
+};
+
+void createMassMatrix(std::function<SampleInfo()> getSample, int32_t numSample)
+{
+    //
+    std::unordered_map<std::pair<int32_t, int32_t>, float> tripletMap;
+    //
+    for (int32_t sn=0;sn<numSample;++sn)
+    {
+        const SampleInfo si = getSample();
+        si.w;
+        si.u;
+        si.v;
+        si.vi0;
+        si.vi1;
+        si.vi2;
+        tripletMap.insert();
+    }
+}
+
+//
+void test5()
+{
+
+}
+
 //
 int32_t main()
 {
     //test0();
     //test1();
     //test2();
-    test3();
+    //test3();
+    //test4();
+    test5();
     
     //
     return 0;
