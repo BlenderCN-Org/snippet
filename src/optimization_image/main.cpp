@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <random>
 #include <array>
+#include <iostream>
 #include <unordered_map>
 //
 #pragma warning(disable:4996)
@@ -543,20 +544,26 @@ public:
 };
 
 // 
-void createMassMatrix(
-    std::function<CreateMassMatrixSampleInfo()> getSample,
-    int32_t numSample,
+void createMassMatrixAndB(
+    std::function<CreateMassMatrixSampleInfo(int32_t)> getSample,
+    int32_t numSampleTotal,
     int32_t numVertex,
-    Eigen::SparseMatrix<float>& massMatrix)
+    int32_t numFace,
+    Eigen::SparseMatrix<float>& massMatrix,
+    Eigen::VectorXf& vertexAos // TODO: もう少しわかりやすい名前に変更する
+)
 {
     //
-    std::unordered_map<std::pair<int32_t, int32_t>, float> tripletMap;
-    const int32_t sampleSizePerPrim = 128;
+    std::map<std::pair<int32_t, int32_t>, float> tripletMap;
+    const int32_t sampleSizePerPrim = numSampleTotal/numFace;
     const float invSamplesize = 1.0f / float(sampleSizePerPrim);
     //
-    for (int32_t sn=0;sn<numSample;++sn)
+    vertexAos.resize(numVertex);
+    vertexAos.setZero();
+    //
+    for (int32_t sn=0;sn<numSampleTotal;++sn)
     {
-        const auto si = getSample();
+        const auto si = getSample(sn);
         /*
         eq(4)の
         $$A_{ ij } = \int_{ S }{h_i(p)h_j(p)} dp$$
@@ -583,8 +590,11 @@ void createMassMatrix(
         tripletMap[std::make_pair(si.vi2, si.vi0)] += wv * dA;
         tripletMap[std::make_pair(si.vi1, si.vi2)] += uv * dA;
         tripletMap[std::make_pair(si.vi2, si.vi1)] += uv * dA;
+        //
+        vertexAos[si.vi0] += si.w * dA;
+        vertexAos[si.vi1] += si.u * dA;
+        vertexAos[si.vi2] += si.v * dA;
     }
-
     // Mass行列の構築
     // NOTE: setFromTriplets()を使わないで自前でソートした方が早いかもしれない
     std::vector<Eigen::Triplet<float>> triplets;
@@ -595,9 +605,8 @@ void createMassMatrix(
     }
     massMatrix.resize(numVertex, numVertex);
     massMatrix.setFromTriplets(triplets.begin(), triplets.end());
-
     // どこからも参照されていない頂点があると対角要素に0ができてしまうので1を入れておく
-    const Eigen::VectorXd lumped = massMatrix * Eigen::VectorXd::Ones(numVertex);
+    const Eigen::VectorXf lumped = massMatrix * Eigen::VectorXf::Ones(numVertex);
     for (int i = 0; i < numVertex; ++i)
     {
         if (lumped(i) <= 0.0)
@@ -610,20 +619,84 @@ void createMassMatrix(
 //
 void test5()
 {
-    //
-    const int32_t numVertex = 128;
-    const int32_t numSample = numVertex * 128;
-    Eigen::SparseMatrix<float> massMatrix;
-    createMassMatrix([]()
+    std::mt19937 eng(0x123);
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    const auto rng01 = [&]()
     {
+        return dist(eng);
+    };
+    const auto triSample = [&]() -> std::pair<float, float>
+    {
+        const float x = rng01();
+        const float y = rng01();
+        if (x + y > 1.0f)
+        {
+            return { 1.0f - x,1.0f - y };
+        }
+        else
+        {
+            return { x,y };
+        }
+    };
+
+    //
+    const int32_t numVertex = 3;
+    const int32_t numFace = 1;
+    const int32_t numSample = 128;
+    Eigen::SparseMatrix<float> massMatrix;
+    Eigen::VectorXf vertexAos;
+    createMassMatrixAndB([numSample,triSample](int32_t sn)
+    {
+        /*
+        A   B
+        +---+
+        |  /|
+        | / |
+        |/  |
+        +---+
+        C   D
+        */
+        //const int32_t triNo = (2 * sn) / numSample;
+        const int32_t triNo = 0;
+        auto uv = triSample();
+        const float u = std::get<0>(uv);
+        const float v = std::get<1>(uv);
         CreateMassMatrixSampleInfo si;
+        // ABC
+        if (triNo == 0)
+        {
+            si.u = u;
+            si.v = v;
+            si.w = 1.0f - (u + v);
+            si.vi0 = 0;
+            si.vi1 = 1;
+            si.vi2 = 2;
+            si.value = 1.0f;
+        }
+        // BCD
+        else if(triNo == 1)
+        {
+            si.u = u;
+            si.v = v;
+            si.w = 1.0f - (u + v);
+            si.vi0 = 3;
+            si.vi1 = 2;
+            si.vi2 = 1;
+            si.value = 1.0f - v;
+        }
+        else
+        {
+            assert(false);
+        }
+        // 
         return  si;
-    },
-        numSample, numVertex, massMatrix );
+    }, numSample, numVertex, numFace, massMatrix, vertexAos);
     //
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<float>> solver;
     auto A = massMatrix;
     solver.compute(A);
+    auto solved = solver.solve(vertexAos);
+    std::cout << solved << std::endl;
     // TODO: 
 }
 
