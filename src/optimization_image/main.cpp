@@ -1,4 +1,4 @@
-﻿#include <cstdio>
+﻿                                                                                                                                                                                                                                                                                                         #include <cstdio>
 #include <cstdint>
 #include <random>
 #include <array>
@@ -590,11 +590,18 @@ void createMassMatrixAndB(
         tripletMap[std::make_pair(si.vi2, si.vi0)] += wv * dA;
         tripletMap[std::make_pair(si.vi1, si.vi2)] += uv * dA;
         tripletMap[std::make_pair(si.vi2, si.vi1)] += uv * dA;
-        //
+        /*
+        eq(5)の
+        $$b_{ i } = \int_{ S }{h_i(p)f(p)} dp$$
+        */
         vertexAos[si.vi0] += si.w * si.value * dA;
         vertexAos[si.vi1] += si.u * si.value * dA;
         vertexAos[si.vi2] += si.v * si.value * dA;
     }
+    float ao0 = vertexAos[0];
+    float ao1 = vertexAos[1];
+    float ao2 = vertexAos[2];
+
     // Mass行列の構築
     // NOTE: setFromTriplets()を使わないで自前でソートした方が早いかもしれない
     std::vector<Eigen::Triplet<float>> triplets;
@@ -640,12 +647,12 @@ void test5()
     };
 
     //
-    const int32_t numVertex = 3;
-    const int32_t numFace = 1;
-    const int32_t numSample = 1024;
+    const int32_t numVertex = 4;
+    const int32_t numFace = 2;
+    const int32_t numSample = 1024 * 16;
     Eigen::SparseMatrix<float> massMatrix;
     Eigen::VectorXf vertexAos;
-    createMassMatrixAndB([numSample,triSample](int32_t sn)
+    createMassMatrixAndB([numSample,triSample, numFace](int32_t sn)
     {
         /*
         A   B
@@ -656,8 +663,8 @@ void test5()
         +---+
         C   D
         */
-        //const int32_t triNo = (2 * sn) / numSample;
-        const int32_t triNo = 0;
+        const int32_t triNo = (numFace * sn) / numSample;
+        //const int32_t triNo = 0;
         auto uv = triSample();
         const float u = std::get<0>(uv);
         const float v = std::get<1>(uv);
@@ -671,7 +678,7 @@ void test5()
             si.vi0 = 0;
             si.vi1 = 1;
             si.vi2 = 2;
-            si.value = 1.0f;
+            si.value = 1.0f - v;
         }
         // BCD
         else if(triNo == 1)
@@ -682,7 +689,7 @@ void test5()
             si.vi0 = 3;
             si.vi1 = 2;
             si.vi2 = 1;
-            si.value = 1.0f - v;
+            si.value = v;
         }
         else
         {
@@ -697,7 +704,6 @@ void test5()
     solver.compute(A);
     auto solved = solver.solve(vertexAos);
     std::cout << solved << std::endl;
-    // TODO: 
 }
 
 //
