@@ -527,41 +527,104 @@ void test4()
 }
 
 // https://github.com/nvpro-samples/optix_prime_baking/blob/master/bake_filter_least_squares.cpp
-struct SampleInfo
+struct CreateMassMatrixSampleInfo
 {
 public:
-    //
+    // wvu
     float w;
     float u;
     float v;
-    //
+    // 頂点インデックス
     int32_t vi0;
     int32_t vi1;
     int32_t vi2;
+    // サンプル値
+    float value;
 };
 
-void createMassMatrix(std::function<SampleInfo()> getSample, int32_t numSample)
+// 
+void createMassMatrix(
+    std::function<CreateMassMatrixSampleInfo()> getSample,
+    int32_t numSample,
+    int32_t numVertex,
+    Eigen::SparseMatrix<float>& massMatrix)
 {
     //
     std::unordered_map<std::pair<int32_t, int32_t>, float> tripletMap;
+    const int32_t sampleSizePerPrim = 128;
+    const float invSamplesize = 1.0f / float(sampleSizePerPrim);
     //
     for (int32_t sn=0;sn<numSample;++sn)
     {
-        const SampleInfo si = getSample();
-        si.w;
-        si.u;
-        si.v;
-        si.vi0;
-        si.vi1;
-        si.vi2;
-        tripletMap.insert();
+        const auto si = getSample();
+        /*
+        eq(4)の
+        $$A_{ ij } = \int_{ S }{h_i(p)h_j(p)} dp$$
+        を解く。
+        A_{ii}は頂点iが属する面積の総和を6で割り、
+        A_{ij}はエッジijが属する面積の総和を12で割れば解析的に出るが
+        少ないサンプル数ではAも数値積分すると答えが安定する(らしい)
+        */
+        const float dA = si.value * invSamplesize;
+        const float ww = si.w * si.w;
+        const float uu = si.u * si.u;
+        const float vv = si.v * si.v;
+        const float wu = si.w * si.u;
+        const float wv = si.w * si.v;
+        const float uv = si.u * si.v;
+        // A_{ii}
+        tripletMap[std::make_pair(si.vi0, si.vi0)] += ww * dA;
+        tripletMap[std::make_pair(si.vi1, si.vi1)] += vv * dA;
+        tripletMap[std::make_pair(si.vi2, si.vi2)] += uu * dA;
+        // A_{ij}
+        tripletMap[std::make_pair(si.vi0, si.vi1)] += wu * dA;
+        tripletMap[std::make_pair(si.vi1, si.vi0)] += wu * dA;
+        tripletMap[std::make_pair(si.vi0, si.vi2)] += wv * dA;
+        tripletMap[std::make_pair(si.vi2, si.vi0)] += wv * dA;
+        tripletMap[std::make_pair(si.vi1, si.vi2)] += uv * dA;
+        tripletMap[std::make_pair(si.vi2, si.vi1)] += uv * dA;
+    }
+
+    // Mass行列の構築
+    // NOTE: setFromTriplets()を使わないで自前でソートした方が早いかもしれない
+    std::vector<Eigen::Triplet<float>> triplets;
+    triplets.reserve(tripletMap.size());
+    for (auto it : tripletMap)
+    {
+        triplets.push_back(Eigen::Triplet<float>(it.first.first, it.first.second, it.second));
+    }
+    massMatrix.resize(numVertex, numVertex);
+    massMatrix.setFromTriplets(triplets.begin(), triplets.end());
+
+    // どこからも参照されていない頂点があると対角要素に0ができてしまうので1を入れておく
+    const Eigen::VectorXd lumped = massMatrix * Eigen::VectorXd::Ones(numVertex);
+    for (int i = 0; i < numVertex; ++i)
+    {
+        if (lumped(i) <= 0.0)
+        {
+            massMatrix.coeffRef(i, i) = 1.0;
+        }
     }
 }
 
 //
 void test5()
 {
-
+    //
+    const int32_t numVertex = 128;
+    const int32_t numSample = numVertex * 128;
+    Eigen::SparseMatrix<float> massMatrix;
+    createMassMatrix([]()
+    {
+        CreateMassMatrixSampleInfo si;
+        return  si;
+    },
+        numSample, numVertex, massMatrix );
+    //
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<float>> solver;
+    auto A = massMatrix;
+    solver.compute(A);
+    // TODO: 
 }
 
 //
