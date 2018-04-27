@@ -572,7 +572,7 @@ void createMassMatrixAndB(
         A_{ij}はエッジijが属する面積の総和を12で割れば解析的に出るが
         少ないサンプル数ではAも数値積分すると答えが安定する(らしい)
         */
-        const float dA = si.value * invSamplesize;
+        const float dA = invSamplesize; // TODO: 面積を掛ける必要がある
         const float ww = si.w * si.w;
         const float uu = si.u * si.u;
         const float vv = si.v * si.v;
@@ -591,9 +591,9 @@ void createMassMatrixAndB(
         tripletMap[std::make_pair(si.vi1, si.vi2)] += uv * dA;
         tripletMap[std::make_pair(si.vi2, si.vi1)] += uv * dA;
         //
-        vertexAos[si.vi0] += si.w * dA;
-        vertexAos[si.vi1] += si.u * dA;
-        vertexAos[si.vi2] += si.v * dA;
+        vertexAos[si.vi0] += si.w * si.value * dA;
+        vertexAos[si.vi1] += si.u * si.value * dA;
+        vertexAos[si.vi2] += si.v * si.value * dA;
     }
     // Mass行列の構築
     // NOTE: setFromTriplets()を使わないで自前でソートした方が早いかもしれない
@@ -642,7 +642,7 @@ void test5()
     //
     const int32_t numVertex = 3;
     const int32_t numFace = 1;
-    const int32_t numSample = 128;
+    const int32_t numSample = 1024;
     Eigen::SparseMatrix<float> massMatrix;
     Eigen::VectorXf vertexAos;
     createMassMatrixAndB([numSample,triSample](int32_t sn)
