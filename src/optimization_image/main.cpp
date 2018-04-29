@@ -90,6 +90,42 @@ public:
 Vec2 operator + (const Vec2& lhs, const Vec2& rhs) { return { lhs.x + rhs.x,lhs.y + rhs.y }; }
 Vec2 operator - (const Vec2& lhs, const Vec2& rhs) { return { lhs.x - rhs.x,lhs.y - rhs.y }; }
 Vec2 operator * (const Vec2& v, float s) { return { v.x * s, v.y * s }; }
+//
+//struct Vec3
+//{
+//public:
+//    float x;
+//    float y;
+//    float z;
+//public:
+//    Vec3 normalized() const
+//    {
+//        const float invLen = 1.0f / std::sqrtf(x*x + y*y + z*z);
+//        Vec3 ret;
+//        ret.x = invLen * x;
+//        ret.y = invLen * y;
+//        ret.z = invLen * z;
+//        return ret;
+//    }
+//    Vec3 cross(Vec3 other) const
+//    {
+//        return
+//        {
+//            y * other.z - z * other.y,
+//            z * other.x - x * other.z,
+//            x * other.y - y * other.z
+//        };
+//    }
+//};
+//Vec3 operator + (const Vec3& lhs, const Vec3& rhs) { return { lhs.x + rhs.x,lhs.y + rhs.y, lhs.z + rhs.z }; }
+//Vec3 operator - (const Vec3& lhs, const Vec3& rhs) { return { lhs.x - rhs.x,lhs.y - rhs.y, lhs.z + rhs.z }; }
+//Vec3 operator * (const Vec3& v, float s) { return { v.x * s, v.y * s, v.z * s }; }
+typedef Eigen::Matrix<float, 3, 1> Vector3;
+typedef Eigen::Matrix<float, 2, 1> Vector2;
+
+//
+
+
 
 #define VTX_SHARE_ALL
 
@@ -135,8 +171,8 @@ public:
         else
         {
             const int32_t i0 = numVertexSqrt_ * y + x / 2 + 1;
-            const int32_t i1 = i0 + numVertexSqrtM1_;
-            const int32_t i2 = i0 + numVertexSqrt_;
+            const int32_t i1 = i0 + numVertexSqrt_;
+            const int32_t i2 = i0 + numVertexSqrtM1_;
             return { i0, i1, i2 };
         }
     }
@@ -255,7 +291,7 @@ void test1()
     // ポイントサンプルで書き出し
     Mesh mesh;
     Image img;
-    img.load("../test.png");
+    img.load("../src.png");
     //
     for (int32_t vi = 0; vi<mesh.numVtx(); ++vi)
     {
@@ -267,7 +303,7 @@ void test1()
     }
     // 書き出し
     mesh.writeToImage(img);
-    img.save("../point.png");
+    img.save("../pointsample.png");
 }
 
 // エリアサンプルして書き出し
@@ -295,7 +331,7 @@ void test2()
     // エリアサンプルで書き出し
     Mesh mesh;
     Image img;
-    img.load("../test.png");
+    img.load("../src.png");
     //
     std::vector<FloatStreamStats> fs;
     fs.resize(mesh.numVtx());
@@ -468,8 +504,9 @@ void test4()
         }
     };
 
-    for (float alpha : std::array<float, 5>({ 0.0f, 0.01f, 0.1f, 0.2f, 0.5f }))
+    //for (float alpha : std::array<float, 5>({ 0.0f, 0.01f, 0.1f, 0.2f, 0.5f }))
     {
+        const float alpha = 0.1f;
         //
         Mesh mesh;
         Image img;
@@ -520,6 +557,7 @@ void test4()
             mesh.vcol(vi) = solved(vi);
         }
         // 書き出し
+        printf("write image\n");
         mesh.writeToImage(img);
         std::stringstream ss;
         ss << "../_opt_area" << alpha << ".png";
@@ -532,7 +570,6 @@ struct CreateMassMatrixSampleInfo
 {
 public:
     // wvu
-    float w;
     float u;
     float v;
     // 頂点インデックス
@@ -573,11 +610,12 @@ void createMassMatrixAndB(
         少ないサンプル数ではAも数値積分すると答えが安定する(らしい)
         */
         const float dA = invSamplesize; // TODO: 面積を掛ける必要がある
-        const float ww = si.w * si.w;
+        const float w = 1.0f - (si.u + si.v);
+        const float ww = w * w;
         const float uu = si.u * si.u;
         const float vv = si.v * si.v;
-        const float wu = si.w * si.u;
-        const float wv = si.w * si.v;
+        const float wu = w * si.u;
+        const float wv = w * si.v;
         const float uv = si.u * si.v;
         // A_{ii}
         tripletMap[std::make_pair(si.vi0, si.vi0)] += ww * dA;
@@ -594,7 +632,7 @@ void createMassMatrixAndB(
         eq(5)の
         $$b_{ i } = \int_{ S }{h_i(p)f(p)} dp$$
         */
-        vertexAos[si.vi0] += si.w * si.value * dA;
+        vertexAos[si.vi0] += w * si.value * dA;
         vertexAos[si.vi1] += si.u * si.value * dA;
         vertexAos[si.vi2] += si.v * si.value * dA;
     }
@@ -624,6 +662,203 @@ void createMassMatrixAndB(
 }
 
 //
+struct Butterfly
+{
+    std::pair<int32_t, int32_t> wingverts = std::make_pair(-1, -1);
+    int32_t count = 0;
+    Butterfly() = default;
+};
+typedef std::map<std::pair<int, int>, Butterfly > EdgeMap;
+typedef Eigen::Matrix<float, 2, 4> Matrix24;
+typedef Eigen::Matrix<float, 2, 3> Matrix23;
+typedef Eigen::Matrix<float, 4, 4> Matrix44;
+
+//
+float triangleArea(const Vector3& a, const Vector3& b, const Vector3& c)
+{
+    Vector3 ba = b - a, ca = c - a;
+    Vector3 crop = ba.cross(ca);
+    return crop.norm() * 0.5f;
+}
+
+// Embeds 3D triangle v[0], v[1], v[2] into a plane, such that:
+//  p[0] = (0, 0), p[1] = (0, positive number), p[2] = (positive number, any number)
+// If triangle is close to degenerate returns false and p is undefined.
+bool planarizeTriangle(const Vector3 v[3], Vector2 p[3])
+{
+    double l01 = (v[0] - v[1]).norm();
+    double l02 = (v[0] - v[2]).norm();
+    double l12 = (v[1] - v[2]).norm();
+
+    const double eps = 0.0;
+    if (l01 <= eps || l02 <= eps || l12 <= eps) return false;
+
+    double p2y = (l02*l02 + l01*l01 - l12*l12) / (2.0 * l01);
+    double tmp1 = l02*l02 - p2y*p2y;
+    if (tmp1 <= eps) return false;
+
+    p[0] = Vector2(0.0f, 0.0f);
+    p[1] = Vector2(0.0f, l01);
+    p[2] = Vector2(sqrt(tmp1), p2y);
+    return true;
+}
+
+// Computes gradient operator (2 x 3 matrix 'grad') for a planar triangle.  If
+// 'normalize' is false then division by determinant is off (and thus the
+// routine cannot fail even for degenerate triangles).
+bool triGrad2D(const Vector2 p[3], const bool normalize, Matrix23 &grad)
+{
+    double det = 1.0;
+    if (normalize) {
+        det = -double(p[0](1))*p[1](0) + double(p[0](0))*p[1](1) + double(p[0](1))*p[2](0)
+            - double(p[1](1))*p[2](0) - double(p[0](0))*p[2](1) + double(p[1](0))*p[2](1);
+        const double eps = 0.0;
+        if (fabs(det) <= eps) {
+            return false;
+        }
+    }
+
+    grad(0, 0) = p[1](1) - p[2](1);
+    grad(0, 1) = p[2](1) - p[0](1);
+    grad(0, 2) = p[0](1) - p[1](1);
+
+    grad(1, 0) = p[2](0) - p[1](0);
+    grad(1, 1) = p[0](0) - p[2](0);
+    grad(1, 2) = p[1](0) - p[0](0);
+
+    grad /= det;
+    return true;
+}
+
+// Computes difference of gradients operator (2 x 4 matrix 'GD') for a butterfly, i.e., 
+// two edge-adjacent triangles.
+// Performs normalization so that units are [m], so GD^T * GD will have units of area [m^2]:
+bool butterflyGradDiff(const Vector3 v[4], Matrix24& GD)
+{
+    Vector3 v1[3] = { v[0], v[1], v[2] };
+    Vector3 v2[3] = { v[0], v[1], v[3] };
+    Vector2 p1[3], p2[3];
+    bool success = planarizeTriangle(v1, p1);
+    if (!success) return false;
+    success = planarizeTriangle(v2, p2);
+    if (!success) return false;
+    p2[2](0) *= -1.0; // flip the x coordinate of the last vertex of the second triangle so we get a butterfly
+
+    Matrix23 grad1, grad2;
+    success = triGrad2D(p1, /*normalize*/ true, grad1);
+    if (!success) return false;
+    success = triGrad2D(p2, true, grad2);
+    if (!success) return false;
+
+    Matrix24 gradExt1, gradExt2;
+    for (int i = 0; i<2; i++) {
+        gradExt1(i, 0) = grad1(i, 0);  gradExt1(i, 1) = grad1(i, 1);  gradExt1(i, 2) = grad1(i, 2); gradExt1(i, 3) = 0.0;
+        gradExt2(i, 0) = grad2(i, 0);  gradExt2(i, 1) = grad2(i, 1);  gradExt2(i, 2) = 0.0;         gradExt2(i, 3) = grad2(i, 2);
+    }
+    GD = gradExt1 - gradExt2;
+
+    const float area1 = triangleArea(v1[0], v1[1], v1[2]);
+    const float area2 = triangleArea(v2[0], v2[1], v2[2]);
+    GD *= (area1 + area2);
+
+    return true;
+}
+
+//
+void createRegressionMatrix(
+    int32_t numFace,
+    int32_t numVertex,
+    const std::function<std::array<int32_t,3>(int32_t)>& getIndexes,
+    const std::function<Vector3(int32_t)>& getVertex,
+    Eigen::SparseMatrix<float>& regularization)
+{
+    // 同じエッジを挟んだ反対側の頂点同士をまとめる
+    EdgeMap edges;
+    for (size_t fn = 0; fn < numFace; ++fn)
+    {
+        const auto indices = getIndexes(fn);
+        for (int vi = 0; vi < 3; ++vi)
+        {
+            const int32_t index0 = std::min(indices[vi], indices[(vi + 1) % 3]);
+            const int32_t index1 = std::max(indices[vi], indices[(vi + 1) % 3]);
+            const std::pair<int32_t, int32_t> edge = std::make_pair(index0, index1);
+            if (index0 == indices[vi])
+            {
+                edges[edge].wingverts.first = indices[(vi + 2) % 3];
+                edges[edge].count++;
+            }
+            else
+            {
+                edges[edge].wingverts.second = indices[(vi + 2) % 3];
+                edges[edge].count++;
+            }
+
+        }
+    }
+    // 
+    size_t skipped = 0;
+    std::map<std::pair<int, int>,float> tripletMap;
+    size_t edgeIndex = 0;
+    for (auto ite = edges.begin(); ite != edges.end(); ++ite, ++edgeIndex)
+    {
+        if (ite->second.count != 2)
+        {
+            continue;  // not an interior edge, ignore
+        }
+
+        std::array<int32_t,4> vertIdx =
+        {
+            ite->first.first,
+            ite->first.second,
+            ite->second.wingverts.first,
+            ite->second.wingverts.second
+        };
+        // duplicate face, ignore
+        if ((ite->second.wingverts.first < 0) ||
+            (ite->second.wingverts.second < 0))
+        {
+            continue;
+        }
+
+        Vector3 butterfly_verts[4];
+        for (size_t i = 0; i < 4; ++i)
+        {
+            butterfly_verts[i] = getVertex(vertIdx[i]);
+        }
+        //
+        Matrix24 GD;
+        if (!butterflyGradDiff(butterfly_verts, GD))
+        {
+            skipped++;
+            continue;
+        }
+
+        Matrix44 GDtGD = GD.transpose() * GD; // units will now be [m^2]
+                                              // scatter GDtGD:
+        for (int i = 0; i < 4; i++)
+        {
+            for (int j = 0; j < 4; j++)
+            {
+                tripletMap[std::make_pair(vertIdx[i], vertIdx[j])] += GDtGD(i, j);
+            }
+        }
+    }
+    //
+    std::vector<Eigen::Triplet<float>> triplets;
+    triplets.reserve(tripletMap.size());
+    for (auto it = tripletMap.begin(); it != tripletMap.end(); ++it) {
+        triplets.push_back(Eigen::Triplet<float>(it->first.first, it->first.second, it->second));
+    }
+    regularization.resize(numVertex, numVertex);
+    regularization.setFromTriplets(triplets.begin(), triplets.end());
+    //
+    if (skipped > 0)
+    {
+        std::cerr << "edgeBasedRegularizer: skipped " << skipped << " edges out of " << edges.size() << std::endl;
+    }
+}
+
+//
 void test5()
 {
     std::mt19937 eng(0x123);
@@ -647,63 +882,73 @@ void test5()
     };
 
     //
-    const int32_t numVertex = 4;
-    const int32_t numFace = 2;
-    const int32_t numSample = 1024 * 16;
+    Mesh mesh;
+    Image img;
+    img.load("../src.png");
+    printf("load done\n");
+    //
+    const int32_t numVertex = mesh.numVtx();
+    const int32_t numFace = mesh.numFace();
+    const int32_t numSample = 128 * numFace;
     Eigen::SparseMatrix<float> massMatrix;
     Eigen::VectorXf vertexAos;
-    createMassMatrixAndB([numSample,triSample, numFace](int32_t sn)
+    createMassMatrixAndB([numSample,triSample,&mesh,&img](int32_t sn)
     {
-        /*
-        A   B
-        +---+
-        |  /|
-        | / |
-        |/  |
-        +---+
-        C   D
-        */
-        const int32_t triNo = (numFace * sn) / numSample;
-        //const int32_t triNo = 0;
+        const int32_t faceNo = int32_t(size_t(mesh.numFace()) * size_t(sn) / size_t(numSample));
+        auto idxs = mesh.index(faceNo);
+        const int32_t idx0 = std::get<0>(idxs);
+        const int32_t idx1 = std::get<1>(idxs);
+        const int32_t idx2 = std::get<2>(idxs);
+        const Vec2 v0 = mesh.vpos(idx0);
+        const Vec2 v1 = mesh.vpos(idx1);
+        const Vec2 v2 = mesh.vpos(idx2);
+        //
         auto uv = triSample();
         const float u = std::get<0>(uv);
         const float v = std::get<1>(uv);
+        const Vec2 uvIimage = v0 + (v1 - v0) * u + (v2 - v0) * v;
+        const int32_t x = int32_t(uvIimage.x * img.width());
+        const int32_t y = int32_t(uvIimage.y * img.height());
+        const float value = img.pixelF(x, y);
+        //
         CreateMassMatrixSampleInfo si;
-        // ABC
-        if (triNo == 0)
-        {
-            si.u = u;
-            si.v = v;
-            si.w = 1.0f - (u + v);
-            si.vi0 = 0;
-            si.vi1 = 1;
-            si.vi2 = 2;
-            si.value = 1.0f - v;
-        }
-        // BCD
-        else if(triNo == 1)
-        {
-            si.u = u;
-            si.v = v;
-            si.w = 1.0f - (u + v);
-            si.vi0 = 3;
-            si.vi1 = 2;
-            si.vi2 = 1;
-            si.value = v;
-        }
-        else
-        {
-            assert(false);
-        }
-        // 
-        return  si;
+        si.u = u;
+        si.v = v;
+        si.vi0 = idx0;
+        si.vi1 = idx1;
+        si.vi2 = idx2;
+        si.value = value;
+        return si;
     }, numSample, numVertex, numFace, massMatrix, vertexAos);
+
+    Eigen::SparseMatrix<float> regression;
+    createRegressionMatrix(numFace, numVertex, 
+        [&](int32_t faceNo) ->std::array<int32_t, 3>
+    {
+        auto is = mesh.index(faceNo);
+        return {std::get<0>(is), std::get<1>(is), std::get<2>(is)};
+    },
+     [&](int32_t vi)
+    {
+        const Vec2 p = mesh.vpos(vi);
+        return Vector3(p.x, p.y, 0.0f);
+    }, regression);
+
+    printf("constrct matrxi done\n");
     //
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<float>> solver;
-    auto A = massMatrix;
+    auto nonz = regression.nonZeros();
+    auto A = massMatrix + regression * 0.0f;
     solver.compute(A);
-    auto solved = solver.solve(vertexAos);
-    std::cout << solved << std::endl;
+    const Eigen::VectorXf solved = solver.solve(vertexAos);
+    printf("solve done\n");
+    // 書き出し
+    for (int32_t vi = 0; vi < mesh.numVtx(); ++vi)
+    {
+        mesh.vcol(vi) = solved(vi);
+    }
+    mesh.writeToImage(img);
+    img.save("../_opt.png");
 }
 
 //
@@ -713,8 +958,8 @@ int32_t main()
     //test1();
     //test2();
     //test3();
-    //test4();
-    test5();
+    test4();
+    //test5();
     
     //
     return 0;
