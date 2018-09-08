@@ -156,11 +156,71 @@ void genBlueNoiseMitchell(int32_t numSample, int32_t m)
 }
 
 //
-void main()
+void main2()
 {
     //
     genBlueNoiseMitchell(1000,10);
-    
+}
+
+// http://uhiaha888.hatenablog.com/entry/20130211/1360589579
+#include <iostream>
+#include <complex>
+#include <vector>
+#include <cmath>
+
+static const double PI = 3.14159265358979;
+
+std::vector< std::complex<double> > dft(const std::vector< std::complex<double> >& x)
+{
+    std::vector<std::complex<double>> result;
+    for (size_t i = 0; i < x.size(); ++i)
+    {
+        std::complex<double> F_j(0.0, 0.0);
+        for (size_t j = 0; j < x.size(); ++j)
+        {
+            double angle = -2.0 * PI * i * j / x.size();
+            F_j += x.at(j) * std::complex<double>(std::cos(angle), std::sin(angle));
+        }
+        result.push_back(F_j);
+    }
+
+    return result;
+}
+
+int main() 
+{
+    // 元データ
+    std::vector<std::complex<double>> x;
+    std::cout << "Original Data" << std::endl;
+    for (size_t i = 0; i < 10; ++i)
+    {
+        x.push_back(std::complex<double>(static_cast<double>(i), 0));
+        std::cout << x.at(i) << std::endl;
+    }
+    std::cout << std::endl;
+
+    // DFT
+    std::vector< std::complex<double> > result = dft(x);
+
+    std::cout << "DFT" << std::endl;
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        std::cout << result.at(i) << std::endl;
+    }
+
+    // DFTの結果の複素共役をさらにDFTしてデータ数で割ると元データを取り出せる(逆変換)
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        result.at(i) = std::conj(result.at(i));
+    }
+
+    std::cout << std::endl << "IDFT" << std::endl;
+    std::vector< std::complex<double> > idft = dft(result);
+    for (size_t i = 0; i < idft.size(); ++i)
+    {
+        std::cout << idft.at(i) / static_cast<double>(idft.size()) << std::endl;
+    }
+    return 0;
 }
 
 
