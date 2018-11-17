@@ -1,0 +1,17 @@
+﻿cnn/mnist_png
+
+*generated
+
+*.opendb
+*.db
+*.sdf
+*.suo
+*.user
+*.tlog
+*.ipdb
+*.exp
+*.iobj
+*.html
+*.idb
+
+
